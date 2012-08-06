@@ -1,0 +1,27 @@
+Name:                jvm-parser
+Version:             0.1
+License:             AllRightsReserved
+Author:              Joe Hendrix <jhendrix@galois.com>
+Category:            Language
+Build-type:          Simple
+Cabal-version:       >=1.8
+Synopsis:            A parser for JVM bytecode (.class) files
+Description:
+
+Library
+  Hs-source-dirs:      src
+  Exposed-modules:     Language.JVM.CFG
+                       Language.JVM.Common
+                       Language.JVM.JarReader
+                       Language.JVM.Parser
+
+  Ghc-options:         -Wall
+
+  Build-depends:       array      >= 0.3.0.0 && < 0.5.0.0,
+                       base       >= 4.0.0.0 && < 5.0.0.0,
+                       binary,
+                       bytestring >= 0.9.1.0 && < 1.0.0.0,
+                       containers >= 0.4.0.0 && < 0.5.0.0,
+                       data-binary-ieee754,
+                       fingertree,
+                       zlib
