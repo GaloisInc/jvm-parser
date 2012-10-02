@@ -27,11 +27,11 @@ import Control.Arrow
 import Control.Monad
 import Data.Binary.Get
 import Data.Bits
-import Data.ByteString.Lazy       (ByteString, isSuffixOf, hGet, hGetContents)
+import Data.ByteString.Lazy       (ByteString, isSuffixOf, hGet)
 import Data.ByteString.Lazy.Char8 (pack, unpack)
 import Data.Map                   (Map)
 import Data.Word
-import System.IO hiding           (hGetContents)
+import System.IO
 
 import qualified Codec.Compression.Zlib.Raw as Zlib
 import qualified Control.Exception          as CE
@@ -97,7 +97,8 @@ addJar jr fn = do
       if s == dirEndSig then return off else findDirEnd (off + 1)
 
   seekFromEnd =<< findDirEnd 4
-  dend <- runGet dirEnd <$> hGetContents h
+  sz <- hFileSize h
+  dend <- runGet dirEnd <$> hGet h (fromIntegral sz)
 
   -- no support for a "multidisk" archive
   CE.assert (dendDiskEntryCnt dend == dendEntryCnt dend) $ return ()
