@@ -15,12 +15,15 @@ module Language.JVM.CFG
   , cfgInstByPC
   , ppInst
   , cfgToDot
+  , isImmediatePostDominator
+  , getPostDominators
   )
 where
 
 import Control.Arrow
 import Data.Array
 import qualified Data.Foldable as DF
+import Data.Graph.Dom
 import qualified Data.IntervalMap.FingerTree as I
 import Data.IntervalMap.FingerTree (IntervalMap, Interval(..))
 import Data.List as L
@@ -43,6 +46,9 @@ data CFG = CFG
   , bbSuccs       :: [(BBId, BBId)]
   , preds         :: BBId -> [BBId]
   , succs         :: BBId -> [BBId]
+  , graph         :: Graph
+  , ipdoms        :: M.Map BBId BBId
+  , pdoms         :: M.Map BBId [BBId]
   }
 
 entryBlock, exitBlock :: BasicBlock
@@ -124,8 +130,17 @@ buildCFG extbl istrm =
                   case bbById cfg bbid of
                     Nothing -> error "CFG.succs: invalid BBId"
                     Just _  -> map snd $ filter ((== bbid) . fst) $ bbSuccs cfg
+      , graph = fromEdges . map pairToInts . bbSuccs $ cfg
+      , ipdoms = M.fromList . map pairFromInts . ipdom $
+                 (fromEnum BBIdExit, graph cfg)
+      , pdoms = M.fromList . map adjFromInts . pdom $
+                (fromEnum BBIdExit, graph cfg)
     }
 
+    pairToInts (n, n') = (fromEnum n, fromEnum n')
+    pairFromInts (n, n') = (toEnum n, toEnum n')
+    --adjToInts (n, ns) = (fromEnum n, map fromEnum ns)
+    adjFromInts (n, ns) = (toEnum n, map toEnum ns)
     finalBlocks = blocks
                   $ foldr
                       process
@@ -150,6 +165,13 @@ buildCFG extbl istrm =
     btm           = mkBrTargetMap extbl istrm
     brTargets pc  = maybe [] id $ M.lookup pc btm
 
+isImmediatePostDominator :: CFG -> BBId -> BBId -> Bool
+isImmediatePostDominator cfg bb bb' =
+  maybe False (== bb') . M.lookup bb . ipdoms $ cfg
+
+getPostDominators :: CFG -> BBId -> [BBId]
+getPostDominators cfg bb = M.findWithDefault [] bb (pdoms cfg)
+
 --------------------------------------------------------------------------------
 -- Basic block construction
 --
@@ -167,8 +189,16 @@ buildCFG extbl istrm =
 -- instructions, in order, that intervene it and the next leader or the end of
 -- the instruction sequence, whichever comes first.
 
-data BBId = BBId PC | BBIdEntry | BBIdExit
+data BBId = BBIdEntry | BBIdExit | BBId PC
   deriving (Eq, Ord, Show)
+
+instance Enum BBId where
+  toEnum 0 = BBIdEntry
+  toEnum 1 = BBIdExit
+  toEnum n = BBId (fromIntegral n - 2)
+  fromEnum BBIdEntry = 0
+  fromEnum BBIdExit = 1
+  fromEnum (BBId n) = fromIntegral n + 2
 
 data BasicBlock = BB
   { bbId      :: BBId
@@ -631,5 +661,23 @@ test5Code = array (0,19)
 test5cfg :: IO ()
 test5cfg = mapM_ (putStrLn . ppBB) $ allBBs $ buildCFG [] test5Code
 
+test5 :: Bool
+test5 =
+  (M.toAscList . ipdoms) cfg ==
+  [ (BBIdEntry, BBId 0)
+  , (BBIdExit, BBIdExit)
+  , (BBId 0, BBId 4)
+  , (BBId 4, BBId 18)
+  , (BBId 9, BBId 4)
+  , (BBId 18, BBIdExit)
+  ] &&
+  (M.toAscList . pdoms) cfg ==
+  [ (BBIdEntry, [BBId 0, BBId 4, BBId 18, BBIdExit])
+  , (BBId 0, [BBId 4, BBId 18, BBIdExit])
+  , (BBId 4, [BBId 18, BBIdExit])
+  , (BBId 9, [BBId 4, BBId 18, BBIdExit])
+  , (BBId 18, [BBIdExit])
+  ] where cfg = buildCFG [] test5Code
+
 allTests :: Bool
-allTests = and [test1, test2, test3, test4]
+allTests = and [test1, test2, test3, test4, test5]
