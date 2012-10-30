@@ -8,7 +8,7 @@ Point-of-contact : jstanley
 {-# LANGUAGE GeneralizedNewtypeDeriving, BangPatterns #-}
 
 module Language.JVM.CFG
-  ( BasicBlock(bbId)
+  ( BasicBlock(bbId, bbInsts)
   , BBId
   , CFG(bbById, bbByPC, nextPC)
   , buildCFG
