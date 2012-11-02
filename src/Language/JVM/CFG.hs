@@ -10,7 +10,7 @@ Point-of-contact : jstanley
 module Language.JVM.CFG
   ( BasicBlock(bbId, bbInsts)
   , BBId
-  , CFG(bbById, bbByPC, nextPC)
+  , CFG(bbById, bbByPC, nextPC, allBBs)
   , buildCFG
   , cfgInstByPC
   , ppInst
