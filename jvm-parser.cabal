@@ -17,11 +17,11 @@ Library
 
   Ghc-options:         -Wall
 
-  Build-depends:       array      >= 0.3.0.0 && < 0.5.0.0,
+  Build-depends:       array,
                        base       >= 4.0.0.0 && < 5.0.0.0,
                        binary,
-                       bytestring >= 0.9.1.0 && < 1.0.0.0,
-                       containers >= 0.4.0.0 && < 0.5.0.0,
+                       bytestring,
+                       containers,
                        data-binary-ieee754,
                        dom-lt,
                        fingertree,
