@@ -15,7 +15,7 @@ Info on the zip file format can be found at:
 http://www.pkware.com/documents/casestudies/APPNOTE.TXT
 -}
 module Language.JVM.JarReader
-  ( JarReader
+  ( JarReader(..)
   , addJar
   , dumpJarReader
   , loadClassFromJar
