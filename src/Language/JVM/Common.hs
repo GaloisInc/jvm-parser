@@ -291,6 +291,10 @@ data Instruction
   | Tableswitch PC Int32 Int32 [PC]
   deriving (Eq,Show)
 
+-- | TODO: improve this
+ppInstruction :: Instruction -> Doc
+ppInstruction = text . show
+
 -- | An entry in the exception table for a method
 data ExceptionTableEntry = ExceptionTableEntry {
   -- | The starting program counter value where the exception handler applies
