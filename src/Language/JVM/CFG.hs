@@ -5,11 +5,12 @@ Stability        : provisional
 Point-of-contact : jstanley
 -}
 
-{-# LANGUAGE GeneralizedNewtypeDeriving, BangPatterns #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving, BangPatterns, OverloadedStrings #-}
 
 module Language.JVM.CFG
   ( BasicBlock(bbId, bbInsts)
   , BBId(..)
+  , ppBBId
   , CFG(bbById, bbByPC, nextPC, allBBs)
   , buildCFG
   , cfgInstByPC
@@ -30,6 +31,7 @@ import Data.List as L
 import Data.Map (Map)
 import qualified Data.Map as M
 import Prelude hiding (rem)
+import Text.PrettyPrint
 
 import Language.JVM.Common
 
@@ -191,6 +193,12 @@ getPostDominators cfg bb = M.findWithDefault [] bb (pdoms cfg)
 
 data BBId = BBIdEntry | BBIdExit | BBId PC
   deriving (Eq, Ord, Show)
+
+ppBBId :: BBId -> Doc
+ppBBId bbid = case bbid of
+    BBIdEntry    -> "BB%entry"
+    BBIdExit     -> "BB%exit"
+    BBId      pc -> "BB%" <> int (fromIntegral pc)
 
 instance Enum BBId where
   toEnum 0 = BBIdEntry

@@ -5,11 +5,13 @@ Stability        : stable
 Point-of-contact : atomb, jhendrix
 -}
 
+{-# LANGUAGE OverloadedStrings #-}
 module Language.JVM.Common where
 
 import Data.Array
 import Data.Int
 import Data.Word
+import Text.PrettyPrint
 
 slashesToDots :: String -> String
 slashesToDots = map (\c -> if c == '/' then '.' else c)
@@ -111,6 +113,13 @@ data MethodKey = MethodKey {
   , methodKeyParameterTypes :: [Type]
   , methodKeyReturnType :: Maybe Type
   } deriving (Eq, Ord, Show)
+
+ppMethodKey :: MethodKey -> Doc
+ppMethodKey (MethodKey name params ret) =
+       text name 
+    <> (parens . commas . map ppType) params 
+    <> maybe "void" ppType ret
+  where commas = sep . punctuate comma
 
 -- | A value stored in the constant pool.
 data ConstantPoolValue
@@ -385,3 +394,6 @@ instance Show Type where
   show ShortType      = "short"
   show BooleanType    = "boolean"
   show (ArrayType tp) = (show tp) ++ "[]"
+
+ppType :: Type -> Doc
+ppType = text . show

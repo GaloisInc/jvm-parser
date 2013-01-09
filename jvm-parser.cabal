@@ -25,4 +25,5 @@ Library
                        data-binary-ieee754,
                        dom-lt,
                        fingertree,
-                       zlib
+                       zlib,
+                       pretty
