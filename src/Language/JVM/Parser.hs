@@ -914,6 +914,9 @@ data Method = Method {
   , _attributes :: [Attribute]
   } deriving (Eq,Show)
 
+instance Ord Method where
+  compare m1 m2 = compare (methodKey m1) (methodKey m2)
+
 -- instance Show Method where
 --   show (Method (MethodKey name returnType parameterTypes)
 --                visibility
