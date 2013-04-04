@@ -87,12 +87,14 @@ module Language.JVM.Parser (
   , intArrayTy
   , stringTy
   , unparseMethodDescriptor
+  , mainKey
   -- * Debugging information
   , hasDebugInfo
   , classSourceFile
   , sourceLineNumberInfo
   , sourceLineNumberOrPrev
   , lookupLineStartPC
+  , lookupLineMethodStartPC
   , localVariableEntries
   , lookupLocalVariableByIdx
   , lookupLocalVariableByName
@@ -188,6 +190,9 @@ makeMethodKey :: String -- ^ Method name
               -> MethodKey
 makeMethodKey name descriptor = MethodKey name parameters returnType  
   where (returnType, parameters)  = parseMethodDescriptor descriptor
+
+mainKey :: MethodKey
+mainKey = makeMethodKey "main" "([Ljava/lang/String;)V"
 
 -- ConstantPool {{{1
 
@@ -1115,6 +1120,18 @@ lookupLineStartPC :: Method -> Word16 -> Maybe PC
 lookupLineStartPC me ln = do
   m <- methodLineNumberTable me
   Map.lookup ln (linePCMap m)
+
+-- | Returns the enclosing method and starting PC for the source at the given line number.
+lookupLineMethodStartPC :: Class -> Word16 -> Maybe (Method, PC)
+lookupLineMethodStartPC cl ln =
+    case results of
+      (p:_) -> return p
+      []    -> mzero
+  where results = do
+          me <- Map.elems . classMethodMap $ cl
+          case lookupLineStartPC me ln of
+            Just pc -> return (me, pc)
+            Nothing -> mzero
 
 localVariableEntries :: Method -> PC -> [LocalVariableTableEntry]
 localVariableEntries method pc =
