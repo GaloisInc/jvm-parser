@@ -16,6 +16,9 @@ import Text.PrettyPrint
 slashesToDots :: String -> String
 slashesToDots = map (\c -> if c == '/' then '.' else c)
 
+dotsToSlashes :: String -> String
+dotsToSlashes = map (\c -> if c == '.' then '/' else c)
+
 -- | JVM Type
 data Type
   = ArrayType Type
@@ -116,8 +119,8 @@ data MethodKey = MethodKey {
 
 ppMethodKey :: MethodKey -> Doc
 ppMethodKey (MethodKey name params ret) =
-       text name 
-    <> (parens . commas . map ppType) params 
+       text name
+    <> (parens . commas . map ppType) params
     <> maybe "void" ppType ret
   where commas = sep . punctuate comma
 
