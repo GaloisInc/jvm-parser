@@ -1,5 +1,5 @@
 Name:                jvm-parser
-Version:             0.2
+Version:             0.2.1
 License:             AllRightsReserved
 Author:              Joe Hendrix <jhendrix@galois.com>
 Category:            Language
@@ -23,7 +23,7 @@ Library
                        bytestring,
                        containers,
                        data-binary-ieee754,
-                       dom-lt,
+                       fgl,
                        fingertree,
                        zlib,
                        pretty

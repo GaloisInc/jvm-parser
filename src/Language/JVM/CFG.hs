@@ -14,6 +14,7 @@ module Language.JVM.CFG
   , CFG(bbById, bbByPC, nextPC, allBBs)
   , buildCFG
   , cfgInstByPC
+  , ppBB
   , ppInst
   , cfgToDot
   , isImmediatePostDominator
@@ -21,15 +22,16 @@ module Language.JVM.CFG
   )
 where
 
-import Control.Arrow
+import Control.Arrow (second)
 import Data.Array
 import qualified Data.Foldable as DF
-import Data.Graph.Dom
+import Data.Graph.Inductive
 import qualified Data.IntervalMap.FingerTree as I
 import Data.IntervalMap.FingerTree (IntervalMap, Interval(..))
 import Data.List as L
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Maybe
 import Prelude hiding (rem)
 import Text.PrettyPrint
 
@@ -48,7 +50,8 @@ data CFG = CFG
   , bbSuccs       :: [(BBId, BBId)]
   , preds         :: BBId -> [BBId]
   , succs         :: BBId -> [BBId]
-  , graph         :: Graph
+  , graph         :: Gr BBId ()
+  , nodeMap       :: NodeMap BBId
   , ipdoms        :: M.Map BBId BBId
   , pdoms         :: M.Map BBId [BBId]
   }
@@ -61,12 +64,13 @@ exitBlock  = BB BBIdExit []
 -- external entry point in the sequence (typically, the method entry point)
 buildCFG :: ExceptionTable -> InstructionStream -> CFG
 buildCFG extbl istrm =
---   trace ("calculated branch targets: " ++ show btm) $
---   trace ("BBs:\n" ++ unlines (map ppBB (DF.toList finalBlocks))) cfg `seq`
---   trace ("bbSuccs = " ++ show (bbSuccs cfg)) $
---   trace ("bbPreds = " ++ show (map (\(a,b) -> (b,a)) (bbSuccs cfg))) $
---   let dot = cfgToDot extbl cfg "???" in
---   trace ("dot:\n" ++ dot) $
+  -- trace ("calculated branch targets: " ++ show btm) $
+  -- trace ("BBs:\n" ++ unlines (map ppBB (DF.toList finalBlocks))) cfg `seq`
+  -- trace ("bbSuccs = " ++ show (bbSuccs cfg)) $
+  -- trace ("bbPreds = " ++ show (map (\(a,b) -> (b,a)) (bbSuccs cfg))) $
+  -- trace (render $ text "pdoms:" <+> vcat (map (\(n, pds) -> ppBBId n <+> (brackets . sep . punctuate comma . map ppBBId $ pds)) (M.toList (pdoms cfg)))) $
+--  let dot = cfgToDot extbl cfg "???" in
+--  trace ("dot:\n" ++ dot) $
   cfg
   where
     cfg = CFG {
@@ -132,17 +136,21 @@ buildCFG extbl istrm =
                   case bbById cfg bbid of
                     Nothing -> error "CFG.succs: invalid BBId"
                     Just _  -> map snd $ filter ((== bbid) . fst) $ bbSuccs cfg
-      , graph = fromEdges . map pairToInts . bbSuccs $ cfg
-      , ipdoms = M.fromList . map pairFromInts . ipdom $
-                 (fromEnum BBIdExit, graph cfg)
-      , pdoms = M.fromList . map adjFromInts . pdom $
-                (fromEnum BBIdExit, graph cfg)
+      , graph = gr
+      , nodeMap = nm
+      , ipdoms = M.fromList . map pairFromInts . ipdom $ gr
+      , pdoms = M.fromList . map adjFromInts . pdom $ gr
     }
 
-    pairToInts (n, n') = (fromEnum n, fromEnum n')
-    pairFromInts (n, n') = (toEnum n, toEnum n')
+    (gr, nm) = buildGraph cfg
+    -- post-dominators are just dominators where the exit is the root
+    ipdom = flip iDom (fst $ mkNode_ nm BBIdExit) . grev
+    pdom = flip dom (fst $ mkNode_ nm BBIdExit) . grev
+
+    pairFromInts (n, n') = (lkup n, lkup n')
+    lkup n = fromMaybe (modErr "found node not in graph") $ lab gr n
     --adjToInts (n, ns) = (fromEnum n, map fromEnum ns)
-    adjFromInts (n, ns) = (toEnum n, map toEnum ns)
+    adjFromInts (n, ns) = (lkup n, map lkup ns)
     finalBlocks = blocks
                   $ foldr
                       process
@@ -166,6 +174,16 @@ buildCFG extbl istrm =
     isBrTarget pc = pc `elem` concat (M.elems btm)
     btm           = mkBrTargetMap extbl istrm
     brTargets pc  = maybe [] id $ M.lookup pc btm
+
+-- | We want to keep the node map around to look up specific nodes
+-- later, even though I think we only do that once
+buildGraph :: CFG -> (Gr BBId (), NodeMap BBId)
+buildGraph cfg = (mkGraph ns es, nm)
+  where (ns, nm) = mkNodes new (map bbId . allBBs $ cfg)
+        es = fromMaybe (modErr "edge with unknown nodes")
+               $ mkEdges nm edgeTriples
+        edgeTriples :: [(BBId, BBId, ())] -- ready to become UEdges
+        edgeTriples = map (\(n1, n2) -> (n1, n2, ())) (bbSuccs cfg)
 
 isImmediatePostDominator :: CFG -> BBId -> BBId -> Bool
 isImmediatePostDominator cfg bb bb' =
@@ -313,10 +331,10 @@ doFlow :: (Eq state, Ord state{-, Show state-}) =>
        -> acc
 doFlow _    _    []          acc  = acc
 doFlow xfer seen !(curr:rem) !acc =
-  let (acc', new) = filter (`M.notMember` seen) `second` xfer acc curr
+  let (acc', new') = filter (`M.notMember` seen) `second` xfer acc curr
   in
 --    trace ("doFlow step: worklist is: " ++ show (rem ++ new)) $
-    doFlow xfer (foldr (flip M.insert ()) seen new) (rem ++ new) acc'
+    doFlow xfer (foldr (flip M.insert ()) seen new') (rem ++ new') acc'
 
 -- We represent the dataflow state before execution of an instruction at PC 'p'
 -- by (Just p, L), where L is a relation between local variable indices and
@@ -402,6 +420,9 @@ ehCoversPC pc (ExceptionTableEntry s e _ _) = pc >= s && pc <= e
 ehsForBB :: ExceptionTable -> BasicBlock -> ExceptionTable
 ehsForBB extbl bb =
   nub $ concatMap (\pc -> filter (ehCoversPC pc) extbl) (bbPCs bb)
+
+modErr :: String -> a
+modErr msg = error $ "Language.JVM.CFG: " ++ msg
 
 --------------------------------------------------------------------------------
 -- Pretty-printing
@@ -673,18 +694,18 @@ test5 :: Bool
 test5 =
   (M.toAscList . ipdoms) cfg ==
   [ (BBIdEntry, BBId 0)
-  , (BBIdExit, BBIdExit)
   , (BBId 0, BBId 4)
   , (BBId 4, BBId 18)
   , (BBId 9, BBId 4)
   , (BBId 18, BBIdExit)
   ] &&
   (M.toAscList . pdoms) cfg ==
-  [ (BBIdEntry, [BBId 0, BBId 4, BBId 18, BBIdExit])
-  , (BBId 0, [BBId 4, BBId 18, BBIdExit])
-  , (BBId 4, [BBId 18, BBIdExit])
-  , (BBId 9, [BBId 4, BBId 18, BBIdExit])
-  , (BBId 18, [BBIdExit])
+  [ (BBIdEntry, [BBIdEntry, BBId 0, BBId 4, BBId 18, BBIdExit])
+  , (BBIdExit, [BBIdExit])
+  , (BBId 0, [BBId 0, BBId 4, BBId 18, BBIdExit])
+  , (BBId 4, [BBId 4, BBId 18, BBIdExit])
+  , (BBId 9, [BBId 9, BBId 4, BBId 18, BBIdExit])
+  , (BBId 18, [BBId 18, BBIdExit])
   ] where cfg = buildCFG [] test5Code
 
 allTests :: Bool
