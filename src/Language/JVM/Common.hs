@@ -1,11 +1,14 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 {- |
-Module           : $Header$
-Description      :
-Stability        : stable
-Point-of-contact : atomb, jhendrix
+Module      : Language.JVM.Common
+Copyright   : Galois, Inc. 2012-2014
+License     : BSD3
+Maintainer  : atomb@galois.com
+Stability   : stable
+Portability : non-portable
 -}
 
-{-# LANGUAGE OverloadedStrings #-}
 module Language.JVM.Common where
 
 import Data.Array

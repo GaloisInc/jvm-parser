@@ -1,8 +1,10 @@
 {- |
-Module           : $Header$
-Description      : A parser for JVM class files
-Stability        : stable
-Point-of-contact : jhendrix, jstanley
+Module      : Language.JVM.Parser
+Copyright   : Galois, Inc. 2012-2014
+License     : BSD3
+Maintainer  : atomb@galois.com
+Stability   : stable
+Portability : portable
 -}
 
 module Language.JVM.Parser (

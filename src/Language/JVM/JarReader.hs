@@ -1,10 +1,12 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 {- |
-Module           : $Header$
-Description      :
-Stability        : stable
-Point-of-contact : jstanley
+Module      : Language.JVM.JarReader
+Copyright   : Galois, Inc. 2012-2014
+License     : BSD3
+Maintainer  : atomb@galois.com
+Stability   : stable
+Portability : non-portable
 
 A quick-n-dirty reader for JAR files.  MANY keep-it-simple concessions have
 been made regarding the zip structure of jars (e.g. no ZIP64, Deflate-type

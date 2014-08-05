@@ -1,12 +1,16 @@
 Name:                jvm-parser
 Version:             0.2.1
-License:             AllRightsReserved
-Author:              Joe Hendrix <jhendrix@galois.com>
+License:             BSD3
+License-file:        LICENSE
+Author:              Galois, Inc.
+Maintainer:          atomb@galois.com
+Copyright:           (c) 2012-2014 Galois Inc.
 Category:            Language
 Build-type:          Simple
 Cabal-version:       >=1.8
 Synopsis:            A parser for JVM bytecode (.class) files
 Description:
+  A parser for JVM bytecode (.class) files
 
 Library
   Hs-source-dirs:      src

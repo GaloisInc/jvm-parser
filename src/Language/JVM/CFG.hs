@@ -1,11 +1,13 @@
-{- |
-Module           : $Header$
-Description      :
-Stability        : provisional
-Point-of-contact : jstanley
--}
-
 {-# LANGUAGE GeneralizedNewtypeDeriving, BangPatterns, OverloadedStrings #-}
+
+{- |
+Module      : Language.JVM.CFG
+Copyright   : Galois, Inc. 2012-2014
+License     : BSD3
+Maintainer  : atomb@galois.com
+Stability   : provisional
+Portability : non-portable
+-}
 
 module Language.JVM.CFG
   ( BasicBlock(bbId, bbInsts)
