@@ -1,0 +1,6 @@
+JVM Parser
+----------
+
+This package implements a simple parser for JVM bytecode (.class and .jar)
+files in Haskell.  It also implements some basic control-flow graph
+manipulations.
