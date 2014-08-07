@@ -14,7 +14,7 @@ compression only, etc., etc.).  Please don't mistake this module for any kind
 of fully-fledged unzip implementation!
 
 Info on the zip file format can be found at:
-http://www.pkware.com/documents/casestudies/APPNOTE.TXT
+<http://www.pkware.com/documents/casestudies/APPNOTE.TXT>
 -}
 module Language.JVM.JarReader
   ( JarReader(..)
@@ -45,17 +45,25 @@ import Language.JVM.Parser
 
 -- import Debug.Trace
 
+-- | Datatype representing a collection of .jar archives.
+--   Classfiles can be loaded from a JarReader using 'loadClassFromJar'.
 newtype JarReader = JR
   { unJR :: Map ByteString (FilePath, DirEnt) }
   deriving (Show)
 
+-- | Print all the directory entries known to this JarReader
+--   onto the console
 dumpJarReader :: JarReader -> IO ()
 dumpJarReader jr = mapM_ putStrLn (map unpack . M.keys $ unJR jr)
 
 emptyJarReader :: JarReader
 emptyJarReader = JR (M.empty)
 
-loadClassFromJar :: String -> JarReader -> IO (Maybe Class)
+-- | Load a class from the given JarReader.
+loadClassFromJar
+   :: String          -- ^ Class file name to load
+   -> JarReader
+   -> IO (Maybe Class)
 loadClassFromJar clNm jr = do
   let k = pack $ clNm ++ (if ".class" `L.isSuffixOf` clNm then "" else ".class")
   case M.lookup k (unJR jr) of
@@ -83,9 +91,11 @@ loadClassFromJar clNm jr = do
       let cl = runGet getClass bytes
       cl `seq` return (Just cl)
 
+-- | Create a new `JarReader` from the given collection of .jar archives
 newJarReader :: [FilePath] -> IO JarReader
 newJarReader = foldM addJar emptyJarReader
 
+-- | Add a .jar archive to a `JarReader`
 addJar :: JarReader -> FilePath -> IO JarReader
 addJar jr fn = do
   h <- openBinaryFile fn ReadMode

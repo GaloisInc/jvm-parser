@@ -7,12 +7,19 @@ License     : BSD3
 Maintainer  : atomb@galois.com
 Stability   : provisional
 Portability : non-portable
+
+Control Flow Graphs of JVM bytecode.  For now, this module simply builds CFGs
+from instruction streams and does post-dominator analysis.
 -}
 
 module Language.JVM.CFG
-  ( BasicBlock(bbId, bbInsts)
+  ( -- * Basic blocks
+    -- $basicblocks
+    BasicBlock(bbId, bbInsts)
   , BBId(..)
   , ppBBId
+
+    -- * Control flow graphs
   , CFG(bbById, bbByPC, nextPC, allBBs)
   , buildCFG
   , cfgInstByPC
@@ -62,8 +69,9 @@ entryBlock, exitBlock :: BasicBlock
 entryBlock = BB BBIdEntry []
 exitBlock  = BB BBIdExit []
 
--- We assume that the first instruction in the instruction stream is the only
--- external entry point in the sequence (typically, the method entry point)
+-- | Build a control-flow graph from an instruction stream.
+--   We assume that the first instruction in the instruction stream is the only
+--   external entry point in the sequence (typically, the method entry point)
 buildCFG :: ExceptionTable -> InstructionStream -> CFG
 buildCFG extbl istrm =
   -- trace ("calculated branch targets: " ++ show btm) $
@@ -178,7 +186,7 @@ buildCFG extbl istrm =
     brTargets pc  = maybe [] id $ M.lookup pc btm
 
 -- | We want to keep the node map around to look up specific nodes
--- later, even though I think we only do that once
+--   later, even though I think we only do that once
 buildGraph :: CFG -> (Gr BBId (), NodeMap BBId)
 buildGraph cfg = (mkGraph ns es, nm)
   where (ns, nm) = mkNodes new (map bbId . allBBs $ cfg)
@@ -187,15 +195,18 @@ buildGraph cfg = (mkGraph ns es, nm)
         edgeTriples :: [(BBId, BBId, ())] -- ready to become UEdges
         edgeTriples = map (\(n1, n2) -> (n1, n2, ())) (bbSuccs cfg)
 
+-- | @isImmediatePostDominator g x y@ returns @True@ if @y@
+--   immediately post-dominates @x@ in control-flow graph @g@.
 isImmediatePostDominator :: CFG -> BBId -> BBId -> Bool
 isImmediatePostDominator cfg bb bb' =
   maybe False (== bb') . M.lookup bb . ipdoms $ cfg
 
+-- | Calculate the post-dominators of a given basic block
 getPostDominators :: CFG -> BBId -> [BBId]
 getPostDominators cfg bb = M.findWithDefault [] bb (pdoms cfg)
 
 --------------------------------------------------------------------------------
--- Basic block construction
+-- $basicblocks
 --
 -- Our notion of basic block is fairly standard: a maximal sequence of
 -- instructions that that can only be entered at the first of them and existed
@@ -211,6 +222,9 @@ getPostDominators cfg bb = M.findWithDefault [] bb (pdoms cfg)
 -- instructions, in order, that intervene it and the next leader or the end of
 -- the instruction sequence, whichever comes first.
 
+-- | Identifies basic blocks by their position
+--   in the instruction stream, or by the special
+--   `BBIdEntry` or `BBIdExit` constructors.
 data BBId = BBIdEntry | BBIdExit | BBId PC
   deriving (Eq, Ord, Show)
 
@@ -228,6 +242,8 @@ instance Enum BBId where
   fromEnum BBIdExit = 1
   fromEnum (BBId n) = fromIntegral n + 2
 
+-- | A basic block consists of an identifier and
+--   the instructions contained in that block.
 data BasicBlock = BB
   { bbId      :: BBId
   , bbInsts   :: [(PC, Instruction)]
@@ -398,6 +414,7 @@ terminatorPC :: BasicBlock -> PC
 terminatorPC BB { bbInsts = [] }    = error "internal: terminatorPC on empty BB"
 terminatorPC bb = fst . last . bbInsts $ bb
 
+-- | fetch an instruction from a CFG by position
 cfgInstByPC :: CFG -> PC -> Maybe Instruction
 cfgInstByPC cfg pc = bbByPC cfg pc >>= flip bbInstByPC pc
 
@@ -466,7 +483,12 @@ ppNm cn mk = slashesToDots cn ++ "." ++ methodKeyName mk
 --------------------------------------------------------------------------------
 -- .dot output
 
-cfgToDot :: ExceptionTable -> CFG -> String -> String
+-- | Render the CFG of a method into Graphviz .dot format
+cfgToDot
+   :: ExceptionTable
+   -> CFG           
+   -> String    -- ^ method name
+   -> String
 cfgToDot extbl cfg methodName =
            "digraph methodcfg {"
   ++ nl ++ "label=\"CFG for method '" ++ methodName ++ "'\";"

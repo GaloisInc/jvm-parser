@@ -5,6 +5,8 @@ License     : BSD3
 Maintainer  : atomb@galois.com
 Stability   : stable
 Portability : portable
+
+Parser for the JVM bytecode format.
 -}
 
 module Language.JVM.Parser (
@@ -19,7 +21,7 @@ module Language.JVM.Parser (
   , ConstantPoolValue(..)
   , Attribute(..)
   , Visibility(..)
-  -- * Serdes helpers
+  -- * SerDes helpers
   , getClass
   -- * Class declarations
   , Class

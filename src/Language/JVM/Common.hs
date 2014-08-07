@@ -7,6 +7,8 @@ License     : BSD3
 Maintainer  : atomb@galois.com
 Stability   : stable
 Portability : non-portable
+
+Basic datatypes and utilities for the JVM parser.
 -}
 
 module Language.JVM.Common where
@@ -16,9 +18,11 @@ import Data.Int
 import Data.Word
 import Text.PrettyPrint
 
+-- | Replace '/' characters with '.' characters
 slashesToDots :: String -> String
 slashesToDots = map (\c -> if c == '/' then '.' else c)
 
+-- | Replace '.' characters with '/' characters
 dotsToSlashes :: String -> String
 dotsToSlashes = map (\c -> if c == '.' then '/' else c)
 
