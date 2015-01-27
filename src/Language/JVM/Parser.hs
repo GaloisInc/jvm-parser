@@ -214,6 +214,9 @@ data ConstantPoolInfo
   | Utf8 String
     -- | Used for gaps after Long and double entries
   | Phantom
+  | MethodHandle Word16 Word16
+  | MethodType Word16
+  | InvokeDynamic Word16 Word16
   deriving (Show)
 
 -- Parses array of bytes from Java string
@@ -274,6 +277,17 @@ getConstantPoolInfo = do
     12 -> do classIndex <- getWord16be
              nameTypeIndex <- getWord16be
              return [NameAndType classIndex nameTypeIndex]
+    ---- CONSTANT_MethodHandle
+    15 -> do refKind <- getWord16be
+             refIdx <- getWord16be
+             return [MethodHandle refKind refIdx]
+    ---- CONSTANT_MethodType
+    16 -> do descIdx <- getWord16be
+             return [MethodType descIdx]
+    ---- CONSTANT_InvokeDynamic
+    18 -> do bootstrapIdx <- getWord16be
+             nameTypeIdx <- getWord16be
+             return [InvokeDynamic bootstrapIdx nameTypeIdx]
     _  -> do position <- bytesRead
              error ("Unexpected constant " ++ show tag ++ " at position " ++ show position)
 
