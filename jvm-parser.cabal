@@ -1,5 +1,5 @@
 Name:                jvm-parser
-Version:             0.2.1.9
+Version:             0.3.0.0
 License:             BSD3
 License-file:        LICENSE
 Author:              Galois, Inc.
@@ -35,3 +35,16 @@ Library
                        fingertree,
                        zlib,
                        pretty
+
+test-suite test-jvm-parser
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Main.hs
+  build-depends: base,
+                 deepseq,
+                 directory,
+                 filepath,
+                 HUnit,
+                 jvm-parser,
+                 tasty,
+                 tasty-hunit
