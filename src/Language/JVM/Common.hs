@@ -242,6 +242,9 @@ data Instruction
   | Imul
   | Ineg
   | Instanceof Type
+  -- | Since we don't yet attempt to resolve @invokedynamic@ targets,
+  -- just store the constant pool index for the call site specifier
+  | Invokedynamic   Word16
   | Invokeinterface String MethodKey
   | Invokespecial   Type   MethodKey
   | Invokestatic    String MethodKey

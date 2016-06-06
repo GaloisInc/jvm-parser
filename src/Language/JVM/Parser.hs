@@ -212,6 +212,9 @@ data ConstantPoolInfo
   | ConstantDouble Double
   | NameAndType Word16 Word16
   | Utf8 String
+  | MethodHandle Word8 Word16
+  | MethodType Word16
+  | InvokeDynamic Word16 Word16
     -- | Used for gaps after Long and double entries
   | Phantom
   deriving (Show)
@@ -274,6 +277,17 @@ getConstantPoolInfo = do
     12 -> do classIndex <- getWord16be
              nameTypeIndex <- getWord16be
              return [NameAndType classIndex nameTypeIndex]
+    ---- CONSTANT_MethodHandle_info
+    15 -> do referenceKind <- getWord8
+             referenceIndex <- getWord16be
+             return [MethodHandle referenceKind referenceIndex]
+    ---- CONSTANT_MethodType_info
+    16 -> do descriptorIndex <- getWord16be
+             return [MethodType descriptorIndex]
+    ---- CONSTANT_InvokeDynamic_info
+    18 -> do bootstrapMethodIndex <- getWord16be
+             nameTypeIndex <- getWord16be
+             return [InvokeDynamic bootstrapMethodIndex nameTypeIndex]
     _  -> do position <- bytesRead
              error ("Unexpected constant " ++ show tag ++ " at position " ++ show position)
 
@@ -585,6 +599,10 @@ getInstruction cp address = do
                _ <- getWord8
                let (ClassType cName, key) = poolInterfaceMethodRef cp index
                 in return $ Invokeinterface cName key
+    0xBA -> do index <- getWord16be
+               _ <- getWord8
+               _ <- getWord8
+               return $ Invokedynamic index
     0xBB -> do
       index <- getWord16be
       case (poolClassType cp index) of
