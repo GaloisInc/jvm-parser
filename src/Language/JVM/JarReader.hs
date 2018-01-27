@@ -24,7 +24,6 @@ module Language.JVM.JarReader
   , newJarReader
   ) where
 
-import Control.Applicative
 import Control.Arrow
 import Control.Monad
 import Data.Binary.Get
