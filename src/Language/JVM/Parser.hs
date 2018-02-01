@@ -14,7 +14,6 @@ module Language.JVM.Parser (
     Type(..)
   , isIValue
   , isPrimitiveType
-  , isRValue
   , stackWidth
   , isFloatType
   , isRefType

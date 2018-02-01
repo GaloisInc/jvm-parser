@@ -61,12 +61,6 @@ isIValue IntType     = True
 isIValue ShortType   = True
 isIValue _           = False
 
--- | Returns true if type is a reference value.
-isRValue :: Type -> Bool
-isRValue (ArrayType _) = True
-isRValue (ClassType _) = True
-isRValue _             = False
-
 -- | Returns true if Java type is a primitive type.  Primitive types are
 -- the Boolean type or numeric types.
 isPrimitiveType :: Type -> Bool
