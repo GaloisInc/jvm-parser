@@ -100,7 +100,7 @@ isFloatType FloatType = True
 isFloatType DoubleType = True
 isFloatType _ = False
 
--- | Returns true if Java type denotes a reference.
+-- | Returns true if Java type denotes a reference (i.e. array or class).
 isRefType :: Type -> Bool
 isRefType (ArrayType _) = True
 isRefType (ClassType _) = True
@@ -147,7 +147,7 @@ type LocalVariableIndex = Word16
 -- | A program counter value.
 type PC = Word16
 
--- | A JVM Instruction
+-- | A JVM instruction.
 data Instruction
   = Aaload
   | Aastore
@@ -304,7 +304,7 @@ data Instruction
   | Tableswitch PC Int32 Int32 [PC]
   deriving (Eq,Show)
 
--- | TODO: improve this
+-- TODO: improve this
 ppInstruction :: Instruction -> Doc
 ppInstruction = text . show
 
@@ -316,7 +316,7 @@ data ExceptionTableEntry = ExceptionTableEntry {
   , endPc :: PC
   -- | The program counter value to jump to when an exception is caught.
   , handlerPc :: PC
-  -- | The type of exception that should be caught or Nothing if all types of
+  -- | The type of exception that should be caught or 'Nothing' if all types of
   -- exceptions should be caught.
   , catchType :: Maybe Type
   } deriving (Eq,Show)
