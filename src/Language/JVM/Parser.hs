@@ -1190,30 +1190,31 @@ data Class = MkClass {
     majorVersion      :: Word16
   , minorVersion      :: Word16
   , constantPool      :: ConstantPool
-  -- | Returns true if class is public.
+  -- | Returns true if the class is public.
   , classIsPublic          :: Bool
-  -- | Returns true if class is final.
+  -- | Returns true if the class is final.
   , classIsFinal           :: Bool
-  -- | Returns true if class was annotated with the super attribute.
+  -- | Returns true if the class was annotated with the @super@ attribute.
   , classHasSuperAttribute :: Bool
-  -- | Returns true if class is an interface
+  -- | Returns true if the class is an interface.
   , classIsInterface       :: Bool
-  -- | Returns true if class is abstract.
+  -- | Returns true if the class is abstract.
   , classIsAbstract        :: Bool
-  -- | Returns name of the class
+  -- | Returns the name of the class.
   , className         :: String
-  -- | Returns name of the super class of this class or Nothing if this
-  -- class has no super class.
+  -- | Returns the name of the superclass of this class or 'Nothing'
+  -- if this class has no superclass.
   , superClass        :: Maybe String
-  -- | Returns interfaces this clas implements
+  -- | Returns the list of interfaces this class implements.
   , classInterfaces   :: [String]
-  -- | Returns fields in the class
+  -- | Returns the list of fields of the class.
   , classFields       :: [Field]
   -- Maps method keys to method.
   , classMethodMap    :: Map MethodKey Method
-  -- | Returns name of source file where class was defined.
+  -- | Returns the name of the source file where the class was
+  -- defined.
   , classSourceFile   :: Maybe String
-  -- | Returns user-defined attributes on class.
+  -- | Returns the list of user-defined attributes of the class.
   , classAttributes   :: [Attribute]
   } deriving (Show)
 
