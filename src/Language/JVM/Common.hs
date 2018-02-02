@@ -11,7 +11,44 @@ Portability : non-portable
 Basic datatypes and utilities for the JVM parser.
 -}
 
-module Language.JVM.Common where
+module Language.JVM.Common
+  ( slashesToDots
+  , dotsToSlashes
+    -- * Types
+  , Type(..)
+  , stringTy
+  , intArrayTy
+  , byteArrayTy
+  , charArrayTy
+  , isIValue
+  , isPrimitiveType
+  , stackWidth
+  , isFloatType
+  , isRefType
+  , ppType
+    -- * FieldId
+  , FieldId(..)
+  , ppFldId
+    -- * MethodKey
+  , MethodKey(..)
+  , ppMethodKey
+    -- * Instructions
+  , ConstantPoolValue(..)
+  , LocalVariableIndex
+  , PC
+  , Instruction(..)
+  , ppInstruction
+  , InstructionStream
+  , canThrowException
+  , isArrayLoad
+  , isReturn
+  , breaksControlFlow
+  , nextPcPrim
+  , safeNextPcPrim
+    -- * ExceptionTable
+  , ExceptionTableEntry(..)
+  , ExceptionTable
+  ) where
 
 import Data.Array
 import Data.Int
