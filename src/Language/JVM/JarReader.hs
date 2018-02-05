@@ -60,11 +60,11 @@ emptyJarReader = JR (M.empty)
 
 -- | Load a class from the given JarReader.
 loadClassFromJar
-   :: String          -- ^ Class file name to load
+   :: ClassName          -- ^ Class name to load
    -> JarReader
    -> IO (Maybe Class)
 loadClassFromJar clNm jr = do
-  let k = pack $ clNm ++ (if ".class" `L.isSuffixOf` clNm then "" else ".class")
+  let k = pack $ unClassName clNm ++ (if ".class" `L.isSuffixOf` unClassName clNm then "" else ".class")
   case M.lookup k (unJR jr) of
     Nothing            -> return Nothing
     Just (jarFn, dent) -> withBinaryFile jarFn ReadMode $ \h -> do

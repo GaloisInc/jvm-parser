@@ -12,8 +12,13 @@ Basic datatypes and utilities for the JVM parser.
 -}
 
 module Language.JVM.Common
-  ( slashesToDots
+  ( -- * Miscellaneous
+    slashesToDots
   , dotsToSlashes
+    -- * Class names
+  , ClassName
+  , mkClassName
+  , unClassName
     -- * Types
   , Type(..)
   , stringTy
@@ -52,6 +57,7 @@ module Language.JVM.Common
 
 import Data.Array
 import Data.Int
+import Data.String (IsString(..))
 import Data.Word
 import Text.PrettyPrint
 
@@ -63,13 +69,28 @@ slashesToDots = map (\c -> if c == '/' then '.' else c)
 dotsToSlashes :: String -> String
 dotsToSlashes = map (\c -> if c == '.' then '/' else c)
 
+-- | Name of a Java class, with names of packages separated by slashes '/'.
+newtype ClassName = ClassName String
+  deriving (Eq, Ord, Show)
+
+instance IsString ClassName where
+  fromString s = ClassName s
+
+-- | Make a class name from a string with packages separated by slashes.
+mkClassName :: String -> ClassName
+mkClassName s = ClassName s
+
+-- | Print class name with names of packages separated by slashes.
+unClassName :: ClassName -> String
+unClassName (ClassName st) = st
+
 -- | JVM Type
 data Type
   = ArrayType Type
   | BooleanType
   | ByteType
   | CharType
-  | ClassType String -- ^ ClassType with name of packages separated by slash '/'
+  | ClassType ClassName
   | DoubleType
   | FloatType
   | IntType
@@ -139,13 +160,13 @@ isRefType _ = False
 
 -- | Unique identifier of field
 data FieldId = FieldId {
-    fieldIdClass :: !String -- ^ Class name
+    fieldIdClass :: !ClassName -- ^ Class name
   , fieldIdName  :: !String -- ^ Field name
   , fieldIdType  :: !Type   -- ^ Field type
   } deriving (Eq, Ord, Show)
 
 ppFldId :: FieldId -> String
-ppFldId fldId = slashesToDots (fieldIdClass fldId) ++ "." ++ fieldIdName fldId
+ppFldId fldId = dotsToSlashes (unClassName (fieldIdClass fldId)) ++ "." ++ fieldIdName fldId
 
 -- MethodKey {{{1
 -- | A unique identifier for looking up a method in a class.
@@ -169,8 +190,8 @@ data ConstantPoolValue
   | Double Double
   | Integer Int32
   | String String
-  | ClassRef String
-  deriving (Eq,Show)
+  | ClassRef ClassName
+  deriving (Eq, Show)
 
 -- | A local variable index.
 type LocalVariableIndex = Word16
@@ -276,10 +297,10 @@ data Instruction
   -- | Since we don't yet attempt to resolve @invokedynamic@ targets,
   -- just store the constant pool index for the call site specifier
   | Invokedynamic   Word16
-  | Invokeinterface String MethodKey
-  | Invokespecial   Type   MethodKey
-  | Invokestatic    String MethodKey
-  | Invokevirtual   Type   MethodKey
+  | Invokeinterface ClassName MethodKey
+  | Invokespecial   Type      MethodKey
+  | Invokestatic    ClassName MethodKey
+  | Invokevirtual   Type      MethodKey
   | Ior
   | Irem
   | Ireturn
@@ -318,7 +339,7 @@ data Instruction
   | Monitorenter
   | Monitorexit
   | Multianewarray Type Word8
-  | New String
+  | New ClassName
   -- The type is the type of the array.
   | Newarray Type
   | Nop
@@ -438,7 +459,7 @@ instance Show Type where
   show FloatType      = "float"
   show IntType        = "int"
   show LongType       = "long"
-  show (ClassType st) = slashesToDots st
+  show (ClassType cn) = slashesToDots (unClassName cn)
   show ShortType      = "short"
   show BooleanType    = "boolean"
   show (ArrayType tp) = (show tp) ++ "[]"

@@ -464,12 +464,12 @@ ppInst (Getfield fldId)
   = "Getfield " ++ ppFldId fldId
 ppInst (Putfield fldId)
   = "Putfield " ++ ppFldId fldId
-ppInst (New s)
-  = "New " ++ (slashesToDots s)
+ppInst (New cn)
+  = "New " ++ slashesToDots (unClassName cn)
 ppInst (Ldc (String s))
   = "Ldc (String " ++ "\"" ++ s ++ "\")"
-ppInst (Ldc (ClassRef s))
-  = "Ldc (ClassRef " ++ slashesToDots s ++ ")"
+ppInst (Ldc (ClassRef cn))
+  = "Ldc (ClassRef " ++ slashesToDots (unClassName cn) ++ ")"
 ppInst (Getstatic fldId)
   = "Getstatic " ++ ppFldId fldId
 ppInst (Putstatic fldId)
@@ -477,8 +477,8 @@ ppInst (Putstatic fldId)
 ppInst i
   = show i
 
-ppNm :: String -> MethodKey -> String
-ppNm cn mk = slashesToDots cn ++ "." ++ methodKeyName mk
+ppNm :: ClassName -> MethodKey -> String
+ppNm cn mk = slashesToDots (unClassName cn) ++ "." ++ methodKeyName mk
 
 --------------------------------------------------------------------------------
 -- .dot output
@@ -486,7 +486,7 @@ ppNm cn mk = slashesToDots cn ++ "." ++ methodKeyName mk
 -- | Render the CFG of a method into Graphviz .dot format
 cfgToDot
    :: ExceptionTable
-   -> CFG           
+   -> CFG
    -> String    -- ^ method name
    -> String
 cfgToDot extbl cfg methodName =

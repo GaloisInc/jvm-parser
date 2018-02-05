@@ -20,6 +20,9 @@ module Language.JVM.Parser (
   , ConstantPoolValue(..)
   , Attribute(..)
   , Visibility(..)
+  , ClassName
+  , mkClassName
+  , unClassName
   -- * SerDes helpers
   , getClass
   -- * Class declarations
@@ -145,7 +148,7 @@ parseTypeDescriptor ('F' : rest) = (FloatType, rest)
 parseTypeDescriptor ('I' : rest) = (IntType, rest)
 parseTypeDescriptor ('J' : rest) = (LongType, rest)
 parseTypeDescriptor ('L' : rest) = split rest []
-  where split (';' : rest') result = (ClassType (reverse result), rest')
+  where split (';' : rest') result = (ClassType (mkClassName (reverse result)), rest')
         split (ch : rest') result = split rest' (ch : result)
         split _ _ = error "internal: unable to parse type descriptor"
 parseTypeDescriptor ('S' : rest) = (ShortType, rest)
@@ -180,7 +183,7 @@ unparseMethodDescriptor (MethodKey _ paramTys retTy) =
     tyToDesc BooleanType    = "Z"
     tyToDesc ByteType       = "B"
     tyToDesc CharType       = "C"
-    tyToDesc (ClassType cn) = "L" ++ cn ++ ";"
+    tyToDesc (ClassType cn) = "L" ++ unClassName cn ++ ";"
     tyToDesc DoubleType     = "D"
     tyToDesc FloatType      = "F"
     tyToDesc IntType        = "I"
@@ -191,7 +194,7 @@ unparseMethodDescriptor (MethodKey _ paramTys retTy) =
 makeMethodKey :: String -- ^ Method name
               -> String -- ^ Method descriptor
               -> MethodKey
-makeMethodKey name descriptor = MethodKey name parameters returnType  
+makeMethodKey name descriptor = MethodKey name parameters returnType
   where (returnType, parameters)  = parseMethodDescriptor descriptor
 
 mainKey :: MethodKey
@@ -317,7 +320,7 @@ poolUtf8 cp i =
 poolValue :: ConstantPool -> ConstantPoolIndex -> ConstantPoolValue
 poolValue cp i =
   case cp ! i of
-    ConstantClass j   -> ClassRef (cp `poolUtf8` j)
+    ConstantClass j   -> ClassRef (mkClassName (cp `poolUtf8` j))
     ConstantDouble v  -> Double v
     ConstantFloat v   -> Float v
     ConstantInteger v -> Integer v
@@ -333,7 +336,7 @@ poolClassType cp i
         let typeName = poolUtf8 cp j
          in if head typeName ==  '['
             then fst (parseTypeDescriptor typeName)
-            else ClassType typeName
+            else ClassType (mkClassName typeName)
       _ -> error ("Index " ++ show i ++ " is not a class reference.")
 
 poolNameAndType :: ConstantPool -> ConstantPoolIndex -> (String, String)
@@ -1201,12 +1204,12 @@ data Class = MkClass {
   -- | Returns true if the class is abstract.
   , classIsAbstract        :: Bool
   -- | Returns the name of the class.
-  , className         :: String
+  , className         :: ClassName
   -- | Returns the name of the superclass of this class or 'Nothing'
   -- if this class has no superclass.
-  , superClass        :: Maybe String
+  , superClass        :: Maybe ClassName
   -- | Returns the list of interfaces this class implements.
-  , classInterfaces   :: [String]
+  , classInterfaces   :: [ClassName]
   -- | Returns the list of fields of the class.
   , classFields       :: [Field]
   -- Maps method keys to method.
