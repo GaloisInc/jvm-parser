@@ -17,11 +17,11 @@ Info on the zip file format can be found at:
 <http://www.pkware.com/documents/casestudies/APPNOTE.TXT>
 -}
 module Language.JVM.JarReader
-  ( JarReader(..)
+  ( JarReader
+  , newJarReader
   , addJar
   , dumpJarReader
   , loadClassFromJar
-  , newJarReader
   ) where
 
 import Control.Arrow

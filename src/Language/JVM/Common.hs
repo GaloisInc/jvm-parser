@@ -43,11 +43,11 @@ module Language.JVM.Common
   , PC
   , Instruction(..)
   , ppInstruction
-  , InstructionStream
   , canThrowException
   , isArrayLoad
   , isReturn
   , breaksControlFlow
+  , InstructionStream
   , nextPcPrim
   , safeNextPcPrim
     -- * ExceptionTable

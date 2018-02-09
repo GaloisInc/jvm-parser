@@ -77,7 +77,7 @@ exitBlock  = BB BBIdExit []
 
 -- | Build a control-flow graph from an instruction stream.
 --   We assume that the first instruction in the instruction stream is the only
---   external entry point in the sequence (typically, the method entry point)
+--   external entry point in the sequence (typically, the method entry point).
 buildCFG :: ExceptionTable -> InstructionStream -> CFG
 buildCFG extbl istrm =
   -- trace ("calculated branch targets: " ++ show btm) $
@@ -207,7 +207,7 @@ isImmediatePostDominator :: CFG -> BBId -> BBId -> Bool
 isImmediatePostDominator cfg bb bb' =
   maybe False (== bb') . M.lookup bb . ipdoms $ cfg
 
--- | Calculate the post-dominators of a given basic block
+-- | Calculate the post-dominators of a given basic block.
 getPostDominators :: CFG -> BBId -> [BBId]
 getPostDominators cfg bb = M.findWithDefault [] bb (pdoms cfg)
 
@@ -420,7 +420,7 @@ terminatorPC :: BasicBlock -> PC
 terminatorPC BB { bbInsts = [] }    = error "internal: terminatorPC on empty BB"
 terminatorPC bb = fst . last . bbInsts $ bb
 
--- | fetch an instruction from a CFG by position
+-- | Fetch an instruction from a CFG by position.
 cfgInstByPC :: CFG -> PC -> Maybe Instruction
 cfgInstByPC cfg pc = bbByPC cfg pc >>= flip bbInstByPC pc
 
