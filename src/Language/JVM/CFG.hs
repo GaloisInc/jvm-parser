@@ -15,12 +15,18 @@ from instruction streams and does post-dominator analysis.
 module Language.JVM.CFG
   ( -- * Basic blocks
     -- $basicblocks
-    BasicBlock(bbId, bbInsts)
+    BasicBlock
+  , bbId
+  , bbInsts
   , BBId(..)
   , ppBBId
 
     -- * Control flow graphs
-  , CFG(bbById, bbByPC, nextPC, allBBs)
+  , CFG
+  , bbById
+  , bbByPC
+  , nextPC
+  , allBBs
   , buildCFG
   , cfgInstByPC
   , ppBB
