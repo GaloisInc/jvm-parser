@@ -10,23 +10,8 @@ Parser for the JVM bytecode format.
 -}
 
 module Language.JVM.Parser (
-  -- * Basic types
-    Type(..)
-  , isIValue
-  , isPrimitiveType
-  , stackWidth
-  , isFloatType
-  , isRefType
-  , ConstantPoolValue(..)
-  , Attribute(..)
-  , Visibility(..)
-  , ClassName
-  , mkClassName
-  , unClassName
-  -- * SerDes helpers
-  , getClass
   -- * Class declarations
-  , Class
+    Class
   , className
   , superClass
   , classIsPublic
@@ -41,9 +26,11 @@ module Language.JVM.Parser (
   , loadClass
   , lookupMethod
   , showClass
+  , getClass
   -- * Field declarations
-  , FieldId(..)
   , Field
+  , Visibility(..)
+  , Attribute(..)
   , fieldName
   , fieldType
   , fieldVisibility
@@ -58,8 +45,6 @@ module Language.JVM.Parser (
   , fieldSignature
   , fieldAttributes
   -- * Method declarations
-  , MethodKey(..)
-  , makeMethodKey
   , Method
   , methodName
   , methodParameterTypes
@@ -73,11 +58,12 @@ module Language.JVM.Parser (
   , methodExceptionTable
   , methodKey
   , methodIsStatic
+  , MethodKey(..)
+  , makeMethodKey
   -- ** Instruction declarations
   , LocalVariableIndex
   , LocalVariableTableEntry(..)
   , PC
-  , Instruction(..)
   , lookupInstruction
   , nextPc
   -- ** Exception table declarations
@@ -107,6 +93,22 @@ module Language.JVM.Parser (
   , ppInst
   , slashesToDots
   , cfgToDot
+  -- * Re-exports
+  -- ** Types
+  , Type(..)
+  , isIValue
+  , isPrimitiveType
+  , stackWidth
+  , isFloatType
+  , isRefType
+  -- ** Instructions
+  , FieldId(..)
+  , Instruction(..)
+  -- ** Class names
+  , ClassName
+  , mkClassName
+  , unClassName
+  , ConstantPoolValue(..)
   ) where
 
 import Control.Exception (assert)
@@ -138,9 +140,10 @@ showOnNewLines n [] = replicate n ' ' ++ "None"
 showOnNewLines n [a] = replicate n ' ' ++ a
 showOnNewLines n (a : rest) = replicate n ' ' ++ a ++ "\n" ++ showOnNewLines n rest
 
--- Type {{{1
+----------------------------------------------------------------------
+-- Type
 
-parseTypeDescriptor :: String -> (Type,String)
+parseTypeDescriptor :: String -> (Type, String)
 parseTypeDescriptor ('B' : rest) = (ByteType, rest)
 parseTypeDescriptor ('C' : rest) = (CharType, rest)
 parseTypeDescriptor ('D' : rest) = (DoubleType, rest)
@@ -157,7 +160,10 @@ parseTypeDescriptor ('[' : rest) = (ArrayType tp, result)
   where (tp, result) = parseTypeDescriptor rest
 parseTypeDescriptor st = error ("Unexpected type descriptor string " ++ st)
 
--- Visibility {{{1
+----------------------------------------------------------------------
+-- Visibility
+
+-- | Visibility of a field.
 data Visibility = Default | Private | Protected | Public
   deriving Eq
 
@@ -166,6 +172,9 @@ instance Show Visibility where
   show Private   = "private"
   show Protected = "protected"
   show Public    = "public"
+
+----------------------------------------------------------------------
+-- Method descriptors
 
 parseMethodDescriptor :: String -> (Maybe Type, [Type])
 parseMethodDescriptor ('(' : rest) = impl rest []
@@ -200,7 +209,8 @@ makeMethodKey name descriptor = MethodKey name parameters returnType
 mainKey :: MethodKey
 mainKey = makeMethodKey "main" "([Ljava/lang/String;)V"
 
--- ConstantPool {{{1
+----------------------------------------------------------------------
+-- ConstantPool
 
 data ConstantPoolInfo
   =  ConstantClass Word16
@@ -662,9 +672,10 @@ getInstruction cp address = do
      position <- bytesRead
      error ("Unexpected op " ++ (show op) ++ " at position " ++ show (position - 1))
 
--- Attributes {{{1
+----------------------------------------------------------------------
+-- Attributes
 
--- | An uninterpreted user defined attribute in the class file.
+-- | An uninterpreted user-defined attribute in the class file.
 data Attribute = Attribute {
      attributeName :: String
    , attributeData :: B.ByteString
@@ -694,8 +705,10 @@ splitAttributes cp names = do
                   bytes <- getByteString (fromIntegral len)
                   impl (n-1) values (Attribute name bytes : rest)
 
--- Field declarations {{{1
--- | A class instance of static field
+----------------------------------------------------------------------
+-- Field declarations
+
+-- | A field of a class.
 data Field = Field {
     -- | Returns name of field.
     fieldName          :: String
@@ -711,7 +724,7 @@ data Field = Field {
   , fieldIsVolatile    :: Bool
     -- | Returns true if field is transient.
   , fieldIsTransient   :: Bool
-    -- | Returns initial value of field or Nothing if not assigned.
+    -- | Returns initial value of field or 'Nothing' if not assigned.
     --
     -- Only static fields may have a constant value.
   , fieldConstantValue :: Maybe ConstantPoolValue
@@ -801,8 +814,8 @@ getField cp = do
                    )
                    userAttrs
 
--- Method declarations {{{1
--- ExceptionTableEntry {{{2
+----------------------------------------------------------------------
+-- Exception table
 
 getExceptionTableEntry :: ConstantPool -> Get ExceptionTableEntry
 getExceptionTableEntry cp = do
@@ -816,8 +829,6 @@ getExceptionTableEntry cp = do
                               (if catchType' == 0
                                 then Nothing
                                 else Just (poolClassType cp catchType')))
-
--- InstructionStream {{{2
 
 -- Run Get Monad until end of string is reached and return list of results.
 getInstructions :: ConstantPool -> PC -> Get InstructionStream
@@ -842,8 +853,15 @@ getValidPcs = map fst . filter (isJust . snd) . assocs
         isJust _ = True
 -}
 
--- LineNumberTable {{{2
-getLineNumberTableEntries :: Get [(PC,Word16)]
+----------------------------------------------------------------------
+-- LineNumberTable
+
+data LineNumberTable = LNT {
+         pcLineMap :: Map PC Word16
+       , linePCMap :: Map Word16 PC
+       } deriving (Eq,Show)
+
+getLineNumberTableEntries :: Get [(PC, Word16)]
 getLineNumberTableEntries = do
   tableLength <- getWord16be
   replicateM (fromIntegral tableLength)
@@ -852,11 +870,6 @@ getLineNumberTableEntries = do
                  return (startPc', lineNumber))
 
 
-data LineNumberTable = LNT {
-         pcLineMap :: Map PC Word16
-       , linePCMap :: Map Word16 PC
-       } deriving (Eq,Show)
-
 parseLineNumberTable :: [L.ByteString] -> LineNumberTable
 parseLineNumberTable buffers =
   let l = concatMap (runGet getLineNumberTableEntries) buffers
@@ -864,7 +877,9 @@ parseLineNumberTable buffers =
           , linePCMap = Map.fromListWith min [ (ln,pc) | (pc,ln) <- l ]
           }
 
--- LocalVariableTableEntry {{{2
+----------------------------------------------------------------------
+-- LocalVariableTableEntry
+
 data LocalVariableTableEntry
   = LocalVariableTableEntry
     { localStart  :: PC -- Start PC
@@ -898,7 +913,9 @@ parseLocalVariableTable :: ConstantPool -> [L.ByteString] -> [LocalVariableTable
 parseLocalVariableTable cp buffers =
   (concat $ map (runGet $ getLocalVariableTableEntries cp) buffers)
 
--- {{{2 Method body
+----------------------------------------------------------------------
+-- Method body
+
 data MethodBody
   = Code Word16 -- maxStack
          Word16 -- maxLocals
@@ -928,7 +945,9 @@ getCode cp = do
                 (parseLocalVariableTable cp localVariableTables)
                 userAttrs
 
--- {{{2 Method definitions
+----------------------------------------------------------------------
+-- Method definitions
+
 data Method = Method {
     methodKey :: MethodKey
   , _visibility :: Visibility
@@ -1052,11 +1071,11 @@ methodIsAbstract m =
     AbstractMethod -> True
     _ -> False
 
--- | Returns name of method
+-- | Returns the name of a method.
 methodName :: Method -> String
 methodName = methodKeyName . methodKey
 
--- | Return parameter types for method.
+-- | Returns parameter types for method.
 methodParameterTypes :: Method -> [Type]
 methodParameterTypes = methodKeyParameterTypes . methodKey
 
@@ -1074,7 +1093,7 @@ localIndexOfParameter m i = assert (0 <= i && i < length params) $ offsets !! id
           where
             f (n,acc) x = (n+x, acc ++ [n+1])
 
--- | Return parameter types for method.
+-- | Returns parameter types for method.
 methodReturnType :: Method -> Maybe Type
 methodReturnType = methodKeyReturnType . methodKey
 
@@ -1101,7 +1120,7 @@ nextPc method pc =
           Just npc -> npc
       _ -> error "internal: unexpected method body form"
 
--- | Returns maxinum number of local variables in method.
+-- | Returns maximum number of local variables in method.
 methodMaxLocals :: Method -> LocalVariableIndex
 methodMaxLocals method =
   case methodBody method of
@@ -1126,7 +1145,7 @@ sourceLineNumberInfo me =
   maybe [] (Map.toList . pcLineMap) $ methodLineNumberTable me
 
 -- | Returns source line number of an instruction in a method at a given PC,
--- or the line number of the nearest predecessor instruction, or Nothing if
+-- or the line number of the nearest predecessor instruction, or 'Nothing' if
 -- neither is available.
 sourceLineNumberOrPrev :: Method -> PC -> Maybe Word16
 sourceLineNumberOrPrev me pc =
@@ -1167,14 +1186,14 @@ localVariableEntries method pc =
     _ -> []
 
 -- | Returns local variable entry at given PC and local variable index or
--- Nothing if no mapping is found.
+-- 'Nothing' if no mapping is found.
 lookupLocalVariableByIdx :: Method -> PC -> LocalVariableIndex
                          -> Maybe LocalVariableTableEntry
 lookupLocalVariableByIdx method pc i =
   find (\e -> localIdx e == i) (localVariableEntries method pc)
 
 -- | Returns local variable entry at given PC and local variable string or
--- Nothing if no mapping is found.
+-- 'Nothing' if no mapping is found.
 lookupLocalVariableByName :: Method -> PC -> String -> Maybe LocalVariableTableEntry
 lookupLocalVariableByName method pc name =
   find (\e -> localName e == name) (localVariableEntries method pc)
@@ -1186,7 +1205,8 @@ methodExceptionTable method =
     Code _ _ _ table _ _ _ -> table
     _ -> error "internal: unexpected method body form"
 
--- Class declarations {{{1
+----------------------------------------------------------------------
+-- Class declarations
 
 -- | A JVM class or interface.
 data Class = MkClass {
@@ -1221,7 +1241,7 @@ data Class = MkClass {
   , classAttributes   :: [Attribute]
   } deriving (Show)
 
--- | Returns methods in class
+-- | Returns methods in class.
 classMethods :: Class -> [Method]
 classMethods = Map.elems . classMethodMap
 
@@ -1243,7 +1263,7 @@ showClass cl
    ++ "Source file: " ++ show (classSourceFile cl) ++ "\n"
    ++ "Attributes:\n" ++ showOnNewLines 2 (map show $ classAttributes cl)
 
--- An instance of Binary to encode and decode an Exp in binary
+-- | Binary parser for classes.
 getClass :: Get Class
 getClass = do
     magic <- getWord32be
@@ -1292,12 +1312,12 @@ getClass = do
             ClassType name -> return name
             tp -> error ("Unexpected class type " ++ show tp)
 
--- | Returns method with given key in class or Nothing if no method with that
+-- | Returns method with given key in class or 'Nothing' if no method with that
 -- key is found.
 lookupMethod :: Class -> MethodKey -> Maybe Method
 lookupMethod javaClass key = Map.lookup key (classMethodMap javaClass)
 
--- | Loads class at given path.
+-- | Load and parse the class at the given path.
 loadClass :: FilePath -> IO Class
 loadClass path = do
   handle <- openBinaryFile path ReadMode

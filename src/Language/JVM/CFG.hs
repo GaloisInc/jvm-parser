@@ -20,7 +20,6 @@ module Language.JVM.CFG
   , bbInsts
   , BBId(..)
   , ppBBId
-
     -- * Control flow graphs
   , CFG
   , bbById
@@ -29,9 +28,11 @@ module Language.JVM.CFG
   , allBBs
   , buildCFG
   , cfgInstByPC
+    -- * Pretty printing
   , ppBB
   , ppInst
   , cfgToDot
+    -- * Post dominators
   , isImmediatePostDominator
   , getPostDominators
   )
