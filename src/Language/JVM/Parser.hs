@@ -48,6 +48,7 @@ module Language.JVM.Parser (
   , Method
   , methodName
   , methodParameterTypes
+  , methodParameterIndexes
   , localIndexOfParameter
   , methodReturnType
   , methodMaxLocals
@@ -1079,21 +1080,25 @@ methodName = methodKeyName . methodKey
 methodParameterTypes :: Method -> [Type]
 methodParameterTypes = methodKeyParameterTypes . methodKey
 
+-- | Returns a list containing the local variable index that each
+-- parameter is stored in when the method is invoked. Non-static
+-- methods reserve index 0 for the @self@ parameter.
+methodParameterIndexes :: Method -> [LocalVariableIndex]
+methodParameterIndexes m = init $ scanl next start params
+  where
+    params = methodParameterTypes m
+    start = if methodIsStatic m then 0 else 1
+    next n DoubleType = n + 2
+    next n LongType = n + 2
+    next n _ = n + 1
+
 -- | Returns the local variable index that the parameter is stored in when
 -- the method is invoked.
 localIndexOfParameter :: Method -> Int -> LocalVariableIndex
-localIndexOfParameter m i = assert (0 <= i && i < length params) $ offsets !! idx
-  where params = methodParameterTypes m
-        -- Index after accounting for this.
-        idx = if methodIsStatic m then i else i + 1
-        slotWidth DoubleType = 2
-        slotWidth LongType = 2
-        slotWidth _ = 1
-        offsets = (0:) . snd $ foldl f (0,[]) (map slotWidth params)
-          where
-            f (n,acc) x = (n+x, acc ++ [n+1])
+localIndexOfParameter m i = assert (0 <= i && i < length offsets) $ offsets !! i
+  where offsets = methodParameterIndexes m
 
--- | Returns parameter types for method.
+-- | Return type of the method, or 'Nothing' for a void return type.
 methodReturnType :: Method -> Maybe Type
 methodReturnType = methodKeyReturnType . methodKey
 
