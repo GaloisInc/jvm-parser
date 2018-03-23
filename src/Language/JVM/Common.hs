@@ -60,6 +60,7 @@ import Data.Int
 import Data.String (IsString(..))
 import Data.Word
 import Text.PrettyPrint
+import Prelude hiding ((<>))
 
 -- | Replace @/@ characters with @.@ characters
 slashesToDots :: String -> String
