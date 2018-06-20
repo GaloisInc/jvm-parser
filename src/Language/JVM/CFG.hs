@@ -28,6 +28,7 @@ module Language.JVM.CFG
   , allBBs
   , buildCFG
   , cfgInstByPC
+  , succs
     -- * Pretty printing
   , ppBB
   , ppInst
