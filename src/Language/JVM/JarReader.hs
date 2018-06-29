@@ -22,6 +22,7 @@ module Language.JVM.JarReader
   , addJar
   , dumpJarReader
   , loadClassFromJar
+  , jarClasses
   ) where
 
 import Control.Arrow
@@ -57,6 +58,10 @@ dumpJarReader jr = mapM_ putStrLn (map unpack . M.keys $ unJR jr)
 
 emptyJarReader :: JarReader
 emptyJarReader = JR (M.empty)
+
+-- | List all of the classes contained in the 'JarReader'
+jarClasses :: JarReader -> [ClassName]
+jarClasses = map (mkClassName . unpack) . M.keys . unJR
 
 -- | Load a class from the given JarReader.
 loadClassFromJar
