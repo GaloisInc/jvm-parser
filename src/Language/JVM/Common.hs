@@ -58,6 +58,7 @@ module Language.JVM.Common
 import Data.Array
 import Data.Int
 import Data.String (IsString(..))
+import Data.Text (Text, pack, unpack)
 import Data.Word
 import Text.PrettyPrint
 import Prelude hiding ((<>))
@@ -71,19 +72,19 @@ dotsToSlashes :: String -> String
 dotsToSlashes = map (\c -> if c == '.' then '/' else c)
 
 -- | Name of a Java class, with names of packages separated by slashes @/@.
-newtype ClassName = ClassName String
+newtype ClassName = ClassName Text
   deriving (Eq, Ord, Show)
 
 instance IsString ClassName where
-  fromString s = ClassName s
+  fromString = mkClassName
 
 -- | Make a class name from a string with packages separated by slashes.
 mkClassName :: String -> ClassName
-mkClassName s = ClassName s
+mkClassName s = ClassName (pack s)
 
 -- | Print class name with names of packages separated by slashes.
 unClassName :: ClassName -> String
-unClassName (ClassName s) = s
+unClassName (ClassName s) = unpack s
 
 -- | JVM Type.
 data Type
