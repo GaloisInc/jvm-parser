@@ -61,6 +61,7 @@ import Data.String (IsString(..))
 import Data.Text (Text, pack, unpack)
 import Data.Word
 import Text.PrettyPrint
+import qualified Text.PrettyPrint.ANSI.Leijen as PPL
 import Prelude hiding ((<>))
 
 -- | Replace @/@ characters with @.@ characters
@@ -469,3 +470,6 @@ instance Show Type where
 
 ppType :: Type -> Doc
 ppType = text . show
+
+instance PPL.Pretty Type where
+  pretty = PPL.text . show

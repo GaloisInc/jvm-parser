@@ -26,7 +26,8 @@ Library
 
   Ghc-options:         -Wall
 
-  Build-depends:       array,
+  Build-depends:       ansi-wl-pprint,
+                       array,
                        base       >= 4.0.0.0 && < 5.0.0.0,
                        binary,
                        bytestring,
