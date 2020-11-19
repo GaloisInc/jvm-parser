@@ -372,19 +372,30 @@ poolInterfaceMethodRef :: ConstantPool -> ConstantPoolIndex -> (Type, MethodKey)
 poolInterfaceMethodRef cp i
   = case cp ! i of
       InterfaceMethodRef classIndex ntIndex ->
-        let (name, fieldDescriptor) = poolNameAndType cp ntIndex
-            interfaceType = poolClassType cp classIndex
-         in (interfaceType, makeMethodKey name fieldDescriptor)
+        poolTypeAndMethodKey cp classIndex ntIndex
       _ -> error ("Index " ++ show i ++ " is not an interface method reference.")
 
 poolMethodRef :: ConstantPool -> ConstantPoolIndex -> (Type, MethodKey)
 poolMethodRef cp i
   = case cp ! i of
       MethodRef classIndex ntIndex ->
-        let (name, fieldDescriptor) = poolNameAndType cp ntIndex
-            classType = poolClassType cp classIndex
-         in (classType, makeMethodKey name fieldDescriptor)
+        poolTypeAndMethodKey cp classIndex ntIndex
       _ -> error ("Index " ++ show i ++ " is not a method reference.")
+
+poolMethodOrInterfaceRef :: ConstantPool -> ConstantPoolIndex -> (Type, MethodKey)
+poolMethodOrInterfaceRef cp i
+  = case cp ! i of
+      MethodRef classIndex ntIndex ->
+        poolTypeAndMethodKey cp classIndex ntIndex
+      InterfaceMethodRef classIndex ntIndex ->
+        poolTypeAndMethodKey cp classIndex ntIndex
+      _ -> error ("Index " ++ show i ++ " is not a method or interface method reference.")
+
+poolTypeAndMethodKey :: ConstantPool -> ConstantPoolIndex -> ConstantPoolIndex -> (Type, MethodKey)
+poolTypeAndMethodKey cp classIndex ntIndex =
+  let (name, fieldDescriptor) = poolNameAndType cp ntIndex
+      classType = poolClassType cp classIndex
+   in (classType, makeMethodKey name fieldDescriptor)
 
 _uncurry3 :: (a -> b -> c -> d) -> (a,b,c) -> d
 _uncurry3 fn (a,b,c) = fn a b c
@@ -602,10 +613,10 @@ getInstruction cp address = do
                let (classType, key) = poolMethodRef cp index
                return $ Invokevirtual classType key
     0xB7 -> do index <- getWord16be
-               let (classType, key) = poolMethodRef cp index
+               let (classType, key) = poolMethodOrInterfaceRef cp index
                return $ Invokespecial classType key
     0xB8 -> do index <- getWord16be
-               let (ClassType cName, key) = poolMethodRef cp index
+               let (ClassType cName, key) = poolMethodOrInterfaceRef cp index
                 in return $ Invokestatic cName key
     0xB9 -> do index <- getWord16be
                _ <- getWord8
