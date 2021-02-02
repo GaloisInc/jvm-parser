@@ -126,6 +126,7 @@ import Data.Int
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (fromJust)
 import Prelude hiding(read)
 import System.IO
 
@@ -151,22 +152,26 @@ showOnNewLines n (a : rest) = replicate n ' ' ++ a ++ "\n" ++ showOnNewLines n r
 ----------------------------------------------------------------------
 -- Type
 
-parseTypeDescriptor :: String -> (Type, String)
-parseTypeDescriptor ('B' : rest) = (ByteType, rest)
-parseTypeDescriptor ('C' : rest) = (CharType, rest)
-parseTypeDescriptor ('D' : rest) = (DoubleType, rest)
-parseTypeDescriptor ('F' : rest) = (FloatType, rest)
-parseTypeDescriptor ('I' : rest) = (IntType, rest)
-parseTypeDescriptor ('J' : rest) = (LongType, rest)
-parseTypeDescriptor ('L' : rest) = split rest []
-  where split (';' : rest') result = (ClassType (mkClassName (reverse result)), rest')
-        split (ch : rest') result = split rest' (ch : result)
-        split _ _ = error "internal: unable to parse type descriptor"
-parseTypeDescriptor ('S' : rest) = (ShortType, rest)
-parseTypeDescriptor ('Z' : rest) = (BooleanType, rest)
-parseTypeDescriptor ('[' : rest) = (ArrayType tp, result)
-  where (tp, result) = parseTypeDescriptor rest
-parseTypeDescriptor st = error ("Unexpected type descriptor string " ++ st)
+parseTypeDescriptor :: String -> Maybe (Type, String)
+parseTypeDescriptor str =
+  case str of
+    ('B' : rest) -> Just (ByteType, rest)
+    ('C' : rest) -> Just (CharType, rest)
+    ('D' : rest) -> Just (DoubleType, rest)
+    ('F' : rest) -> Just (FloatType, rest)
+    ('I' : rest) -> Just (IntType, rest)
+    ('J' : rest) -> Just (LongType, rest)
+    ('S' : rest) -> Just (ShortType, rest)
+    ('Z' : rest) -> Just (BooleanType, rest)
+    ('L' : rest) -> split rest []
+    ('[' : rest) ->
+      do (tp, result) <- parseTypeDescriptor rest
+         Just (ArrayType tp, result)
+    _ -> Nothing
+  where
+    split (';' : rest') result = Just (ClassType (mkClassName (reverse result)), rest')
+    split (ch : rest') result = split rest' (ch : result)
+    split _ _ = Nothing
 
 ----------------------------------------------------------------------
 -- Visibility
@@ -184,13 +189,20 @@ instance Show Visibility where
 ----------------------------------------------------------------------
 -- Method descriptors
 
-parseMethodDescriptor :: String -> (Maybe Type, [Type])
-parseMethodDescriptor ('(' : rest) = impl rest []
-  where impl ")V" types = (Nothing, reverse types)
-        impl (')' : rest') types = (Just $ fst $ parseTypeDescriptor rest', reverse types)
-        impl text types = let (tp, rest') = parseTypeDescriptor text
-                          in impl rest' (tp : types)
-parseMethodDescriptor _ = error "internal: unable to parse method descriptor"
+parseMethodDescriptor :: String -> Maybe (Maybe Type, [Type])
+parseMethodDescriptor str =
+  case str of
+    ('(' : rest) -> impl rest []
+    _ -> Nothing
+  where
+    impl ")V" types = Just (Nothing, reverse types)
+    impl (')' : rest') types =
+      case parseTypeDescriptor rest' of
+        Just (tp, "") -> Just (Just tp, reverse types)
+        _ -> Nothing
+    impl text types =
+      do (tp, rest') <- parseTypeDescriptor text
+         impl rest' (tp : types)
 
 unparseMethodDescriptor :: MethodKey -> String
 unparseMethodDescriptor (MethodKey _ paramTys retTy) =
@@ -212,7 +224,7 @@ makeMethodKey :: String -- ^ Method name
               -> String -- ^ Method descriptor
               -> MethodKey
 makeMethodKey name descriptor = MethodKey name parameters returnType
-  where (returnType, parameters)  = parseMethodDescriptor descriptor
+  where Just (returnType, parameters) = parseMethodDescriptor descriptor
 
 mainKey :: MethodKey
 mainKey = makeMethodKey "main" "([Ljava/lang/String;)V"
@@ -352,7 +364,7 @@ poolClassType cp i
       ConstantClass j ->
         let typeName = poolUtf8 cp j
          in if head typeName ==  '['
-            then fst (parseTypeDescriptor typeName)
+            then fst (fromJust (parseTypeDescriptor typeName))
             else ClassType (mkClassName typeName)
       _ -> error ("Index " ++ show i ++ " is not a class reference.")
 
@@ -369,7 +381,7 @@ poolFieldRef cp i
   = case cp ! i of
       FieldRef classIndex ntIndex ->
         let (name, fldDescriptor) = poolNameAndType cp ntIndex
-            (fldType, [])         = parseTypeDescriptor fldDescriptor
+            (fldType, [])         = fromJust (parseTypeDescriptor fldDescriptor)
             ClassType cName       = poolClassType cp classIndex
          in FieldId cName name fldType
       _ -> error ("Index " ++ show i ++ " is not a field reference.")
@@ -790,7 +802,7 @@ getField :: ConstantPool -> Get Field
 getField cp = do
     accessFlags <- getWord16be
     name <- return . poolUtf8 cp =<< getWord16be
-    fldType <- return . fst . parseTypeDescriptor . poolUtf8 cp =<< getWord16be
+    fldType <- return . fst . fromJust . parseTypeDescriptor . poolUtf8 cp =<< getWord16be
     ([constantValue, synthetic, deprecated, signature], userAttrs)
        <- splitAttributes cp ["ConstantValue", "Synthetic", "Deprecated", "Signature"]
     return $ Field name
@@ -923,7 +935,7 @@ getLocalVariableTableEntries cp = do
                             startPc'
                             len
                             (poolUtf8 cp nameIndex)
-                            (fst $ parseTypeDescriptor $ poolUtf8 cp descriptorIndex)
+                            (fst $ fromJust $ parseTypeDescriptor $ poolUtf8 cp descriptorIndex)
                             index)
 
 parseLocalVariableTable :: ConstantPool -> [L.ByteString] -> [LocalVariableTableEntry]
@@ -1038,7 +1050,7 @@ getMethod :: ConstantPool -> Get Method
 getMethod cp = do
     accessFlags <- getWord16be
     name        <- getWord16be >>= return . (poolUtf8 cp)
-    (returnType, parameterTypes) <- getWord16be >>= return . parseMethodDescriptor . (poolUtf8 cp)
+    (returnType, parameterTypes) <- getWord16be >>= return . fromJust . parseMethodDescriptor . (poolUtf8 cp)
     ([codeVal, exceptionsVal, syntheticVal, deprecatedVal], userAttrs)
          <- splitAttributes cp ["Code", "Exceptions", "Synthetic", "Deprecated"]
     let isStatic'       = (accessFlags .&. 0x008) /= 0
