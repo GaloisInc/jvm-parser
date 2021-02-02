@@ -9,6 +9,8 @@ Portability : portable
 Parser for the JVM bytecode format.
 -}
 
+{-# LANGUAGE LambdaCase #-}
+
 module Language.JVM.Parser (
   -- * Class declarations
     Class
@@ -336,84 +338,94 @@ getConstantPool = do
           info <- getConstantPoolInfo
           parseList (n - fromIntegral (length info)) (info ++ result)
 
--- | Returns string at given index in constant pool or raises error
--- | if constant pool index is not a Utf8 string.
-poolUtf8 :: ConstantPool -> ConstantPoolIndex -> String
+-- | Return the string at the given index in the constant pool, or
+-- fail if the constant pool index is not a UTF-8 string.
+poolUtf8 :: ConstantPool -> ConstantPoolIndex -> Get String
 poolUtf8 cp i =
   case cp ! i of
-    Utf8 s -> s
-    v -> error $ "Index " ++ show i ++ " has value " ++ show v ++ " when string expected."
+    Utf8 s -> pure s
+    v -> failure $ "Index " ++ show i ++ " has value " ++ show v ++ " when string expected."
 
 -- | Returns value at given index in constant pool or raises error
--- | if constant pool index is not a value.
-poolValue :: ConstantPool -> ConstantPoolIndex -> ConstantPoolValue
+-- if constant pool index is not a value.
+poolValue :: ConstantPool -> ConstantPoolIndex -> Get ConstantPoolValue
 poolValue cp i =
   case cp ! i of
-    ConstantClass j   -> ClassRef (mkClassName (cp `poolUtf8` j))
-    ConstantDouble v  -> Double v
-    ConstantFloat v   -> Float v
-    ConstantInteger v -> Integer v
-    ConstantLong v    -> Long v
-    ConstantString j  -> String (cp `poolUtf8` j)
-    v -> error ("Index " ++ show i ++ " has unexpected value " ++ show v
-                         ++ " when a constant was expected.")
+    ConstantClass j   -> ClassRef . mkClassName <$> poolUtf8 cp j
+    ConstantDouble v  -> pure $ Double v
+    ConstantFloat v   -> pure $ Float v
+    ConstantInteger v -> pure $ Integer v
+    ConstantLong v    -> pure $ Long v
+    ConstantString j  -> String <$> poolUtf8 cp j
+    v -> failure ("Index " ++ show i ++ " has unexpected value " ++ show v
+                           ++ " when a constant was expected.")
 
-poolClassType :: ConstantPool -> ConstantPoolIndex -> Type
-poolClassType cp i
-  = case cp ! i of
-      ConstantClass j ->
-        let typeName = poolUtf8 cp j
-         in if head typeName ==  '['
-            then fst (fromJust (parseTypeDescriptor typeName))
-            else ClassType (mkClassName typeName)
-      _ -> error ("Index " ++ show i ++ " is not a class reference.")
+parseType :: String -> Get Type
+parseType s =
+  case parseTypeDescriptor s of
+    Just (tp, []) -> pure tp
+    _ -> failure ("Invalid type descriptor: " ++ show s)
 
-poolNameAndType :: ConstantPool -> ConstantPoolIndex -> (String, String)
-poolNameAndType cp i
-  = case cp ! i of
-      NameAndType nameIndex typeIndex ->
-        (poolUtf8 cp nameIndex, poolUtf8 cp typeIndex)
-      _ -> error ("Index " ++ show i ++ " is not a name and type reference.")
+-- | For instructions that are described in the JVM spec like this:
+-- "The run-time constant pool item at the index must be a symbolic
+-- reference to a class, array, or interface type."
+poolClassType :: ConstantPool -> ConstantPoolIndex -> Get Type
+poolClassType cp i =
+  case cp ! i of
+    ConstantClass j ->
+      do typeName <- poolUtf8 cp j
+         if head typeName == '['
+           then parseType typeName
+           else pure $ ClassType (mkClassName typeName)
+    _ ->
+      failure ("Index " ++ show i ++ " is not a class reference.")
+
+poolNameAndType :: ConstantPool -> ConstantPoolIndex -> Get (String, String)
+poolNameAndType cp i =
+  case cp ! i of
+    NameAndType nameIndex typeIndex ->
+      (,) <$> poolUtf8 cp nameIndex <*> poolUtf8 cp typeIndex
+    _ -> failure ("Index " ++ show i ++ " is not a name and type reference.")
 
 -- | Returns tuple containing field class, name, and type at given index.
-poolFieldRef :: ConstantPool -> ConstantPoolIndex -> FieldId
-poolFieldRef cp i
-  = case cp ! i of
-      FieldRef classIndex ntIndex ->
-        let (name, fldDescriptor) = poolNameAndType cp ntIndex
-            (fldType, [])         = fromJust (parseTypeDescriptor fldDescriptor)
-            ClassType cName       = poolClassType cp classIndex
-         in FieldId cName name fldType
-      _ -> error ("Index " ++ show i ++ " is not a field reference.")
+poolFieldRef :: ConstantPool -> ConstantPoolIndex -> Get FieldId
+poolFieldRef cp i =
+  case cp ! i of
+    FieldRef classIndex ntIndex ->
+      do (name, descriptor) <- poolNameAndType cp ntIndex
+         fldType <- parseType descriptor
+         ClassType cName <- poolClassType cp classIndex
+         pure $ FieldId cName name fldType
+    _ -> failure ("Index " ++ show i ++ " is not a field reference.")
 
-poolInterfaceMethodRef :: ConstantPool -> ConstantPoolIndex -> (Type, MethodKey)
-poolInterfaceMethodRef cp i
-  = case cp ! i of
-      InterfaceMethodRef classIndex ntIndex ->
-        poolTypeAndMethodKey cp classIndex ntIndex
-      _ -> error ("Index " ++ show i ++ " is not an interface method reference.")
+poolInterfaceMethodRef :: ConstantPool -> ConstantPoolIndex -> Get (Type, MethodKey)
+poolInterfaceMethodRef cp i =
+  case cp ! i of
+    InterfaceMethodRef classIndex ntIndex ->
+      poolTypeAndMethodKey cp classIndex ntIndex
+    _ -> failure ("Index " ++ show i ++ " is not an interface method reference.")
 
-poolMethodRef :: ConstantPool -> ConstantPoolIndex -> (Type, MethodKey)
-poolMethodRef cp i
-  = case cp ! i of
-      MethodRef classIndex ntIndex ->
-        poolTypeAndMethodKey cp classIndex ntIndex
-      _ -> error ("Index " ++ show i ++ " is not a method reference.")
+poolMethodRef :: ConstantPool -> ConstantPoolIndex -> Get (Type, MethodKey)
+poolMethodRef cp i =
+  case cp ! i of
+    MethodRef classIndex ntIndex ->
+      poolTypeAndMethodKey cp classIndex ntIndex
+    _ -> failure ("Index " ++ show i ++ " is not a method reference.")
 
-poolMethodOrInterfaceRef :: ConstantPool -> ConstantPoolIndex -> (Type, MethodKey)
-poolMethodOrInterfaceRef cp i
-  = case cp ! i of
-      MethodRef classIndex ntIndex ->
-        poolTypeAndMethodKey cp classIndex ntIndex
-      InterfaceMethodRef classIndex ntIndex ->
-        poolTypeAndMethodKey cp classIndex ntIndex
-      _ -> error ("Index " ++ show i ++ " is not a method or interface method reference.")
+poolMethodOrInterfaceRef :: ConstantPool -> ConstantPoolIndex -> Get (Type, MethodKey)
+poolMethodOrInterfaceRef cp i =
+  case cp ! i of
+    MethodRef classIndex ntIndex ->
+      poolTypeAndMethodKey cp classIndex ntIndex
+    InterfaceMethodRef classIndex ntIndex ->
+      poolTypeAndMethodKey cp classIndex ntIndex
+    _ -> failure ("Index " ++ show i ++ " is not a method or interface method reference.")
 
-poolTypeAndMethodKey :: ConstantPool -> ConstantPoolIndex -> ConstantPoolIndex -> (Type, MethodKey)
+poolTypeAndMethodKey :: ConstantPool -> ConstantPoolIndex -> ConstantPoolIndex -> Get (Type, MethodKey)
 poolTypeAndMethodKey cp classIndex ntIndex =
-  let (name, fieldDescriptor) = poolNameAndType cp ntIndex
-      classType = poolClassType cp classIndex
-   in (classType, makeMethodKey name fieldDescriptor)
+  do (name, fieldDescriptor) <- poolNameAndType cp ntIndex
+     classType <- poolClassType cp classIndex
+     pure (classType, makeMethodKey name fieldDescriptor)
 
 _uncurry3 :: (a -> b -> c -> d) -> (a,b,c) -> d
 _uncurry3 fn (a,b,c) = fn a b c
@@ -442,9 +454,9 @@ getInstruction cp address = do
     0x0F -> return $ Ldc $ Double 1.0
     0x10 -> liftM (Ldc . Integer . fromIntegral) getInt8
     0x11 -> liftM (Ldc . Integer . fromIntegral) getInt16be
-    0x12 -> liftM (Ldc . poolValue cp . fromIntegral) getWord8
-    0x13 -> liftM (Ldc . poolValue cp) getWord16be
-    0x14 -> liftM (Ldc . poolValue cp) getWord16be
+    0x12 -> liftM Ldc $ poolValue cp =<< liftM fromIntegral getWord8
+    0x13 -> liftM Ldc $ poolValue cp =<< getWord16be
+    0x14 -> liftM Ldc $ poolValue cp =<< getWord16be
     0x15 -> liftM (Iload . fromIntegral) getWord8
     0x16 -> liftM (Lload . fromIntegral) getWord8
     0x17 -> liftM (Fload . fromIntegral) getWord8
@@ -623,34 +635,33 @@ getInstruction cp address = do
     0xAF -> return Dreturn
     0xB0 -> return Areturn
     0xB1 -> return Return
-    0xB2 -> return . Getstatic . poolFieldRef cp =<< getWord16be
-    0xB3 -> return . Putstatic . poolFieldRef cp =<< getWord16be
-    0xB4 -> return . Getfield  . poolFieldRef cp =<< getWord16be
-    0xB5 -> return . Putfield  . poolFieldRef cp =<< getWord16be
+    0xB2 -> Getstatic <$> (poolFieldRef cp =<< getWord16be)
+    0xB3 -> Putstatic <$> (poolFieldRef cp =<< getWord16be)
+    0xB4 -> Getfield <$> (poolFieldRef cp =<< getWord16be)
+    0xB5 -> Putfield <$> (poolFieldRef cp =<< getWord16be)
     0xB6 -> do index <- getWord16be
-               let (classType, key) = poolMethodRef cp index
+               (classType, key) <- poolMethodRef cp index
                return $ Invokevirtual classType key
     0xB7 -> do index <- getWord16be
-               let (classType, key) = poolMethodOrInterfaceRef cp index
+               (classType, key) <- poolMethodOrInterfaceRef cp index
                return $ Invokespecial classType key
     0xB8 -> do index <- getWord16be
-               let (ClassType cName, key) = poolMethodOrInterfaceRef cp index
-                in return $ Invokestatic cName key
+               (ClassType cName, key) <- poolMethodOrInterfaceRef cp index
+               pure $ Invokestatic cName key
     0xB9 -> do index <- getWord16be
                _ <- getWord8
                _ <- getWord8
-               let (ClassType cName, key) = poolInterfaceMethodRef cp index
-                in return $ Invokeinterface cName key
+               (ClassType cName, key) <- poolInterfaceMethodRef cp index
+               pure $ Invokeinterface cName key
     0xBA -> do index <- getWord16be
                _ <- getWord8
                _ <- getWord8
                return $ Invokedynamic index
-    0xBB -> do
-      index <- getWord16be
-      case (poolClassType cp index) of
-        ClassType name -> return (New name)
-        _ -> error "internal: unexpected pool class type"
-    0xBD -> return . Newarray . ArrayType . poolClassType cp =<< get
+    0xBB -> do ty <- getWord16be >>= poolClassType cp
+               case ty of
+                 ClassType name -> pure (New name)
+                 _ -> failure "internal: unexpected pool class type"
+    0xBD -> Newarray . ArrayType <$> (poolClassType cp =<< getWord16be)
     0xBC -> do typeCode <- getWord8
                elementType <-
                  case typeCode of
@@ -666,8 +677,8 @@ getInstruction cp address = do
                pure $ Newarray (ArrayType elementType)
     0xBE -> return Arraylength
     0xBF -> return Athrow
-    0xC0 -> return . Checkcast  . poolClassType cp =<< get
-    0xC1 -> return . Instanceof . poolClassType cp =<< get
+    0xC0 -> Checkcast <$> (poolClassType cp =<< getWord16be)
+    0xC1 -> Instanceof <$> (poolClassType cp =<< getWord16be)
     0xC2 -> return Monitorenter
     0xC3 -> return Monitorexit
     -- Wide instruction
@@ -689,10 +700,7 @@ getInstruction cp address = do
         _ -> do
           position <- bytesRead
           failure ("Unexpected wide op " ++ (show op) ++ " at position " ++ show (position - 2))
-    0xC5 -> do
-      classIndex <- getWord16be
-      dimensions <- getWord8
-      return (Multianewarray (poolClassType cp classIndex) dimensions)
+    0xC5 -> Multianewarray <$> (poolClassType cp =<< getWord16be) <*> getWord8
     0xC6 -> return . Ifnull    . (address +) . fromIntegral =<< getInt16be
     0xC7 -> return . Ifnonnull . (address +) . fromIntegral =<< getInt16be
     0xC8 -> return . Goto      . (address +) . fromIntegral =<< getInt32be
@@ -725,14 +733,14 @@ splitAttributes cp names = do
         impl n values rest = do
           nameIndex <- getWord16be
           len <- getWord32be
-          let name = (poolUtf8 cp nameIndex)
-           in case elemIndex name names of
-                Just i  -> do
-                  bytes <- getLazyByteString (fromIntegral len)
-                  impl (n-1) (appendAt values i bytes) rest
-                Nothing -> do
-                  bytes <- getByteString (fromIntegral len)
-                  impl (n-1) values (Attribute name bytes : rest)
+          name <- poolUtf8 cp nameIndex
+          case elemIndex name names of
+            Just i ->
+              do bytes <- getLazyByteString (fromIntegral len)
+                 impl (n - 1) (appendAt values i bytes) rest
+            Nothing ->
+              do bytes <- getByteString (fromIntegral len)
+                 impl (n - 1) values (Attribute name bytes : rest)
 
 ----------------------------------------------------------------------
 -- Field declarations
@@ -801,19 +809,31 @@ data Field = Field {
 getField :: ConstantPool -> Get Field
 getField cp = do
     accessFlags <- getWord16be
-    name <- return . poolUtf8 cp =<< getWord16be
-    fldType <- return . fst . fromJust . parseTypeDescriptor . poolUtf8 cp =<< getWord16be
+    name <- poolUtf8 cp =<< getWord16be
+    fldType <- parseType =<< poolUtf8 cp =<< getWord16be
     ([constantValue, synthetic, deprecated, signature], userAttrs)
        <- splitAttributes cp ["ConstantValue", "Synthetic", "Deprecated", "Signature"]
+    constantVal <-
+      case constantValue of
+        [bytes] -> Just <$> poolValue cp (runGet getWord16be bytes) -- FIXME runGet is partial
+        [] -> pure Nothing
+        _ -> failure "internal: unexpected constant value form"
+    sig <-
+      case signature of
+        [bytes] -> Just <$> poolUtf8 cp (runGet getWord16be bytes) -- FIXME runGet is partial
+        [] -> pure Nothing
+        _ -> failure "internal: unexpected signature form"
+    visibility <-
+      case accessFlags .&. 0x7 of
+        0x0 -> pure Default
+        0x1 -> pure Public
+        0x2 -> pure Private
+        0x4 -> pure Protected
+        flags -> failure $ "Unexpected flags " ++ show flags
     return $ Field name
                    fldType
                    -- Visibility
-                   (case accessFlags .&. 0x7 of
-                     0x0 -> Default
-                     0x1 -> Public
-                     0x2 -> Private
-                     0x4 -> Protected
-                     flags -> error $ "Unexpected flags " ++ show flags)
+                   visibility
                    -- Static
                    ((accessFlags .&. 0x0008) /= 0)
                    -- Final
@@ -823,11 +843,7 @@ getField cp = do
                    -- Transient
                    ((accessFlags .&. 0x0080) /= 0)
                    -- Constant Value
-                   (case constantValue of
-                     [bytes] -> Just $ poolValue cp $ runGet getWord16be bytes
-                     [] -> Nothing
-                     _ -> error "internal: unexpected constant value form"
-                   )
+                   constantVal
                    -- Check for synthetic bit in flags and buffer
                    ((accessFlags .&. 0x1000) /= 0 || (not (null synthetic)))
                    -- Deprecated flag
@@ -835,12 +851,7 @@ getField cp = do
                    -- Check for enum bit in flags
                    ((accessFlags .&. 0x4000) /= 0)
                    -- Signature
-                   (case signature of
-                     [bytes] ->
-                        Just $ poolUtf8 cp $ runGet getWord16be bytes
-                     [] -> Nothing
-                     _ -> error "internal: unexpected signature form"
-                   )
+                   sig
                    userAttrs
 
 ----------------------------------------------------------------------
@@ -851,13 +862,15 @@ getExceptionTableEntry cp = do
   startPc'   <- getWord16be
   endPc'     <- getWord16be
   handlerPc' <- getWord16be
-  catchType' <- getWord16be
+  catchIndex <- getWord16be
+  catchType' <-
+    if catchIndex == 0
+    then pure Nothing
+    else Just <$> poolClassType cp catchIndex
   return (ExceptionTableEntry startPc'
                               endPc'
                               handlerPc'
-                              (if catchType' == 0
-                                then Nothing
-                                else Just (poolClassType cp catchType')))
+                              catchType')
 
 -- Run Get Monad until end of string is reached and return list of results.
 getInstructions :: ConstantPool -> PC -> Get InstructionStream
@@ -928,15 +941,10 @@ getLocalVariableTableEntries cp = do
   replicateM (fromIntegral tableLength)
              (do startPc'        <- getWord16be
                  len             <- getWord16be
-                 nameIndex       <- getWord16be
-                 descriptorIndex <- getWord16be
+                 name            <- getWord16be >>= poolUtf8 cp
+                 ty              <- getWord16be >>= poolUtf8 cp >>= parseType
                  index           <- getWord16be
-                 return $ LocalVariableTableEntry
-                            startPc'
-                            len
-                            (poolUtf8 cp nameIndex)
-                            (fst $ fromJust $ parseTypeDescriptor $ poolUtf8 cp descriptorIndex)
-                            index)
+                 pure $ LocalVariableTableEntry startPc' len name ty index)
 
 parseLocalVariableTable :: ConstantPool -> [L.ByteString] -> [LocalVariableTableEntry]
 parseLocalVariableTable cp buffers =
@@ -1044,13 +1052,14 @@ instance Ord Method where
 getExceptions :: ConstantPool -> Get [Type]
 getExceptions cp = do
   exceptionCount <- getWord16be
-  replicateN (getWord16be >>= return . poolClassType cp) exceptionCount
+  replicateN (getWord16be >>= poolClassType cp) exceptionCount
 
 getMethod :: ConstantPool -> Get Method
 getMethod cp = do
     accessFlags <- getWord16be
-    name        <- getWord16be >>= return . (poolUtf8 cp)
-    (returnType, parameterTypes) <- getWord16be >>= return . fromJust . parseMethodDescriptor . (poolUtf8 cp)
+    name        <- getWord16be >>= poolUtf8 cp
+    descriptor  <- getWord16be >>= poolUtf8 cp
+    let (returnType, parameterTypes) = fromJust (parseMethodDescriptor descriptor)
     ([codeVal, exceptionsVal, syntheticVal, deprecatedVal], userAttrs)
          <- splitAttributes cp ["Code", "Exceptions", "Synthetic", "Deprecated"]
     let isStatic'       = (accessFlags .&. 0x008) /= 0
@@ -1301,7 +1310,7 @@ getClass :: Get Class
 getClass = do
     magic <- getWord32be
     (if magic /= 0xCAFEBABE
-      then error "Unexpected magic value"
+      then failure "Unexpected magic value"
       else return ())
     minorVersion'   <- getWord16be
     majorVersion'   <- getWord16be
@@ -1309,10 +1318,20 @@ getClass = do
     accessFlags     <- getWord16be
     thisClass       <- getReferenceName cp
     superClassIndex <- getWord16be
+    superClass'     <- if superClassIndex == 0 then pure Nothing else
+                       poolClassType cp superClassIndex >>=
+                       \case
+                         ClassType name -> pure (Just name)
+                         classType -> failure ("Unexpected class type " ++ show classType)
     interfaces      <- getWord16be >>= replicateN (getReferenceName cp)
     fields          <- getWord16be >>= replicateN (getField cp)
     methods         <- getWord16be >>= replicateN (getMethod cp)
     ([sourceFile], userAttrs) <- splitAttributes cp ["SourceFile"]
+    sourceFile' <-
+      case sourceFile of
+        [bytes] -> Just <$> poolUtf8 cp (runGet getWord16be bytes) -- FIXME: runGet is partial
+        [] -> pure Nothing
+        _ -> failure "internal: unexpected source file form"
     return $ MkClass majorVersion'
                      minorVersion'
                      cp
@@ -1322,28 +1341,17 @@ getClass = do
                      ((accessFlags .&. 0x200) /= 0)
                      ((accessFlags .&. 0x400) /= 0)
                      thisClass
-                     (if superClassIndex == 0
-                       then Nothing
-                       else
-                         case poolClassType cp superClassIndex of
-                           ClassType name -> (Just name)
-                           classType -> error ("Unexpected class type " ++ show classType))
+                     superClass'
                      interfaces
                      fields
                      (Map.fromList (map (\m -> (methodKey m, m)) methods))
-                     -- Source file
-                     (case sourceFile of
-                       [bytes] ->
-                         Just $ poolUtf8 cp $ runGet getWord16be bytes
-                       [] -> Nothing
-                       _ -> error "internal: unexpected source file form"
-                     )
+                     sourceFile'
                      userAttrs
   where getReferenceName cp = do
-          index <- getWord16be
-          case poolClassType cp index of
-            ClassType name -> return name
-            tp -> error ("Unexpected class type " ++ show tp)
+          ty <- getWord16be >>= poolClassType cp
+          case ty of
+            ClassType name -> pure name
+            tp -> failure ("Unexpected class type " ++ show tp)
 
 -- | Returns method with given key in class or 'Nothing' if no method with that
 -- key is found.
