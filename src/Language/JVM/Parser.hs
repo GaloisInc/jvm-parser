@@ -132,6 +132,13 @@ import System.IO
 import Language.JVM.CFG
 import Language.JVM.Common
 
+-- | Indicate parse failure with the given error message. Note that
+-- failure in the 'Get' monad already tracks the number of bytes
+-- consumed, so it is not necessary to include position information in
+-- the error message.
+failure :: String -> Get a
+failure msg = fail msg
+
 -- Version of replicate with arguments convoluted for parser.
 replicateN :: (Integral b, Monad m) => m a -> b -> m [a]
 replicateN fn i = sequence (replicate (fromIntegral i) fn)
@@ -301,8 +308,7 @@ getConstantPoolInfo = do
     18 -> do bootstrapMethodIndex <- getWord16be
              nameTypeIndex <- getWord16be
              return [InvokeDynamic bootstrapMethodIndex nameTypeIndex]
-    _  -> do position <- bytesRead
-             error ("Unexpected constant " ++ show tag ++ " at position " ++ show position)
+    _  -> do failure ("Unexpected constant " ++ show tag)
 
 type ConstantPoolIndex = Word16
 type ConstantPool = Array ConstantPoolIndex ConstantPoolInfo
@@ -632,21 +638,20 @@ getInstruction cp address = do
       case (poolClassType cp index) of
         ClassType name -> return (New name)
         _ -> error "internal: unexpected pool class type"
-    0xBC -> do
-      typeCode <- getWord8
-      (return . Newarray . ArrayType)
-        (case typeCode of
-          4  -> BooleanType
-          5  -> CharType
-          6  -> FloatType
-          7  -> DoubleType
-          8  -> ByteType
-          9  -> ShortType
-          10 -> IntType
-          11 -> LongType
-          _  -> error "internal: invalid type code encountered"
-        )
     0xBD -> return . Newarray . ArrayType . poolClassType cp =<< get
+    0xBC -> do typeCode <- getWord8
+               elementType <-
+                 case typeCode of
+                   4  -> pure BooleanType
+                   5  -> pure CharType
+                   6  -> pure FloatType
+                   7  -> pure DoubleType
+                   8  -> pure ByteType
+                   9  -> pure ShortType
+                   10 -> pure IntType
+                   11 -> pure LongType
+                   _  -> failure "internal: invalid type code encountered"
+               pure $ Newarray (ArrayType elementType)
     0xBE -> return Arraylength
     0xBF -> return Athrow
     0xC0 -> return . Checkcast  . poolClassType cp =<< get
@@ -671,7 +676,7 @@ getInstruction cp address = do
         0xA9 -> liftM Ret    getWord16be
         _ -> do
           position <- bytesRead
-          error ("Unexpected wide op " ++ (show op) ++ " at position " ++ show (position - 2))
+          failure ("Unexpected wide op " ++ (show op) ++ " at position " ++ show (position - 2))
     0xC5 -> do
       classIndex <- getWord16be
       dimensions <- getWord8
@@ -682,7 +687,7 @@ getInstruction cp address = do
     0xC9 -> return . Jsr       . (address +) . fromIntegral =<< getInt32be
     _ -> do
      position <- bytesRead
-     error ("Unexpected op " ++ (show op) ++ " at position " ++ show (position - 1))
+     failure ("Unexpected op " ++ (show op) ++ " at position " ++ show (position - 1))
 
 ----------------------------------------------------------------------
 -- Attributes
