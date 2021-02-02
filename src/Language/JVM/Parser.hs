@@ -422,8 +422,8 @@ getInstruction cp address = do
     0x0D -> return $ Ldc $ Float 2.0
     0x0E -> return $ Ldc $ Double 0.0
     0x0F -> return $ Ldc $ Double 1.0
-    0x10 -> liftM (Ldc . Integer . fromIntegral) (get :: Get Int8)
-    0x11 -> liftM (Ldc . Integer . fromIntegral) (get :: Get Int16)
+    0x10 -> liftM (Ldc . Integer . fromIntegral) getInt8
+    0x11 -> liftM (Ldc . Integer . fromIntegral) getInt16be
     0x12 -> liftM (Ldc . poolValue cp . fromIntegral) getWord8
     0x13 -> liftM (Ldc . poolValue cp) getWord16be
     0x14 -> liftM (Ldc . poolValue cp) getWord16be
@@ -540,7 +540,7 @@ getInstruction cp address = do
     0x83 -> return Lxor
     0x84 -> do
       index    <- getWord8
-      constant <- get :: Get Int8
+      constant <- getInt8
       return (Iinc (fromIntegral index) (fromIntegral constant))
     0x85 -> return I2l
     0x86 -> return I2f
@@ -562,41 +562,41 @@ getInstruction cp address = do
     0x96 -> return Fcmpg
     0x97 -> return Dcmpl
     0x98 -> return Dcmpg
-    0x99 -> return . Ifeq      . (address +) . fromIntegral =<< (get :: Get Int16)
-    0x9A -> return . Ifne      . (address +) . fromIntegral =<< (get :: Get Int16)
-    0x9B -> return . Iflt      . (address +) . fromIntegral =<< (get :: Get Int16)
-    0x9C -> return . Ifge      . (address +) . fromIntegral =<< (get :: Get Int16)
-    0x9D -> return . Ifgt      . (address +) . fromIntegral =<< (get :: Get Int16)
-    0x9E -> return . Ifle      . (address +) . fromIntegral =<< (get :: Get Int16)
-    0x9F -> return . If_icmpeq . (address +) . fromIntegral =<< (get :: Get Int16)
-    0xA0 -> return . If_icmpne . (address +) . fromIntegral =<< (get :: Get Int16)
-    0xA1 -> return . If_icmplt . (address +) . fromIntegral =<< (get :: Get Int16)
-    0xA2 -> return . If_icmpge . (address +) . fromIntegral =<< (get :: Get Int16)
-    0xA3 -> return . If_icmpgt . (address +) . fromIntegral =<< (get :: Get Int16)
-    0xA4 -> return . If_icmple . (address +) . fromIntegral =<< (get :: Get Int16)
-    0xA5 -> return . If_acmpeq . (address +) . fromIntegral =<< (get :: Get Int16)
-    0xA6 -> return . If_acmpne . (address +) . fromIntegral =<< (get :: Get Int16)
-    0xA7 -> return . Goto      . (address +) . fromIntegral =<< (get :: Get Int16)
-    0xA8 -> return . Jsr       . (address +) . fromIntegral =<< (get :: Get Int16)
+    0x99 -> return . Ifeq      . (address +) . fromIntegral =<< getInt16be
+    0x9A -> return . Ifne      . (address +) . fromIntegral =<< getInt16be
+    0x9B -> return . Iflt      . (address +) . fromIntegral =<< getInt16be
+    0x9C -> return . Ifge      . (address +) . fromIntegral =<< getInt16be
+    0x9D -> return . Ifgt      . (address +) . fromIntegral =<< getInt16be
+    0x9E -> return . Ifle      . (address +) . fromIntegral =<< getInt16be
+    0x9F -> return . If_icmpeq . (address +) . fromIntegral =<< getInt16be
+    0xA0 -> return . If_icmpne . (address +) . fromIntegral =<< getInt16be
+    0xA1 -> return . If_icmplt . (address +) . fromIntegral =<< getInt16be
+    0xA2 -> return . If_icmpge . (address +) . fromIntegral =<< getInt16be
+    0xA3 -> return . If_icmpgt . (address +) . fromIntegral =<< getInt16be
+    0xA4 -> return . If_icmple . (address +) . fromIntegral =<< getInt16be
+    0xA5 -> return . If_acmpeq . (address +) . fromIntegral =<< getInt16be
+    0xA6 -> return . If_acmpne . (address +) . fromIntegral =<< getInt16be
+    0xA7 -> return . Goto      . (address +) . fromIntegral =<< getInt16be
+    0xA8 -> return . Jsr       . (address +) . fromIntegral =<< getInt16be
     0xA9 -> liftM (Ret . fromIntegral) getWord8
     0xAA -> do
       read <- bytesRead
       skip $ fromIntegral $ (4 - read `mod` 4) `mod` 4
-      defaultBranch <- return . (address +) . fromIntegral =<< (get :: Get Int32)
-      low <- get :: Get Int32
-      high <- get :: Get Int32
+      defaultBranch <- return . (address +) . fromIntegral =<< getInt32be
+      low <- getInt32be
+      high <- getInt32be
       offsets <- replicateN
-                   (return . (address +) . fromIntegral =<< (get :: Get Int32))
+                   (return . (address +) . fromIntegral =<< getInt32be)
                    (high - low + 1)
       return $ Tableswitch defaultBranch low high offsets
     0xAB -> do
       read <- bytesRead
       skip (fromIntegral ((4 - read `mod` 4) `mod` 4))
-      defaultBranch <- get :: Get Int32
-      count <- get :: Get Int32
+      defaultBranch <- getInt32be
+      count <- getInt32be
       pairs <- replicateM (fromIntegral count) $ do
-                 v <- get :: Get Int32
-                 o <- get :: Get Int32
+                 v <- getInt32be
+                 o <- getInt32be
                  return (v, ((address +) . fromIntegral) o)
       return $ Lookupswitch (address + fromIntegral defaultBranch) pairs
     0xAC -> return Ireturn
@@ -667,7 +667,7 @@ getInstruction cp address = do
         0x38 -> liftM Fstore getWord16be
         0x39 -> liftM Dstore getWord16be
         0x3A -> liftM Astore getWord16be
-        0x84 -> liftM2 Iinc  getWord16be (get :: Get Int16)
+        0x84 -> liftM2 Iinc  getWord16be getInt16be
         0xA9 -> liftM Ret    getWord16be
         _ -> do
           position <- bytesRead
@@ -676,10 +676,10 @@ getInstruction cp address = do
       classIndex <- getWord16be
       dimensions <- getWord8
       return (Multianewarray (poolClassType cp classIndex) dimensions)
-    0xC6 -> return . Ifnull    . (address +) . fromIntegral =<< (get :: Get Int16)
-    0xC7 -> return . Ifnonnull . (address +) . fromIntegral =<< (get :: Get Int16)
-    0xC8 -> return . Goto      . (address +) . fromIntegral =<< (get :: Get Int32)
-    0xC9 -> return . Jsr       . (address +) . fromIntegral =<< (get :: Get Int32)
+    0xC6 -> return . Ifnull    . (address +) . fromIntegral =<< getInt16be
+    0xC7 -> return . Ifnonnull . (address +) . fromIntegral =<< getInt16be
+    0xC8 -> return . Goto      . (address +) . fromIntegral =<< getInt32be
+    0xC9 -> return . Jsr       . (address +) . fromIntegral =<< getInt32be
     _ -> do
      position <- bytesRead
      error ("Unexpected op " ++ (show op) ++ " at position " ++ show (position - 1))
