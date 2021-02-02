@@ -60,8 +60,7 @@ import Data.Int
 import Data.String (IsString(..))
 import Data.Text (Text, pack, unpack)
 import Data.Word
-import Text.PrettyPrint
-import qualified Text.PrettyPrint.ANSI.Leijen as PPL
+import Prettyprinter
 import Prelude hiding ((<>))
 
 -- | Replace @/@ characters with @.@ characters
@@ -178,9 +177,9 @@ data MethodKey = MethodKey {
   , methodKeyReturnType :: Maybe Type
   } deriving (Eq, Ord, Show)
 
-ppMethodKey :: MethodKey -> Doc
+ppMethodKey :: MethodKey -> Doc ann
 ppMethodKey (MethodKey name params ret) =
-       text name
+       pretty name
     <> (parens . commas . map ppType) params
     <> maybe "void" ppType ret
   where commas = sep . punctuate comma
@@ -361,8 +360,8 @@ data Instruction
   deriving (Eq,Show)
 
 -- TODO: improve this
-ppInstruction :: Instruction -> Doc
-ppInstruction = text . show
+ppInstruction :: Instruction -> Doc ann
+ppInstruction = viaShow
 
 -- | An entry in the exception table for a method
 data ExceptionTableEntry = ExceptionTableEntry {
@@ -456,20 +455,28 @@ safeNextPcPrim istrm pc | pc <= snd (bounds istrm) = Just $ nextPcPrim istrm pc
 --------------------------------------------------------------------------------
 -- Instances
 
+instance Pretty ClassName where
+  pretty (ClassName s) = pretty s
+
+instance Pretty FieldId where
+  pretty fldId = pretty (fieldIdClass fldId) <> "." <> pretty (fieldIdName fldId)
+
+ppType :: Type -> Doc ann
+ppType t =
+  case t of
+    ByteType     -> "byte"
+    CharType     -> "char"
+    DoubleType   -> "double"
+    FloatType    -> "float"
+    IntType      -> "int"
+    LongType     -> "long"
+    ClassType cn -> pretty (slashesToDots (unClassName cn))
+    ShortType    -> "short"
+    BooleanType  -> "boolean"
+    ArrayType tp -> ppType tp <> "[]"
+
 instance Show Type where
-  show ByteType       = "byte"
-  show CharType       = "char"
-  show DoubleType     = "double"
-  show FloatType      = "float"
-  show IntType        = "int"
-  show LongType       = "long"
-  show (ClassType cn) = slashesToDots (unClassName cn)
-  show ShortType      = "short"
-  show BooleanType    = "boolean"
-  show (ArrayType tp) = (show tp) ++ "[]"
+  show = show . pretty
 
-ppType :: Type -> Doc
-ppType = text . show
-
-instance PPL.Pretty Type where
-  pretty = PPL.text . show
+instance Pretty Type where
+  pretty = ppType

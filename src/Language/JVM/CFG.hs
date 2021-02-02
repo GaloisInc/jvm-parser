@@ -50,7 +50,7 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe
 import Prelude hiding (rem, (<>))
-import Text.PrettyPrint
+import Prettyprinter
 
 import Language.JVM.Common
 
@@ -236,11 +236,11 @@ getPostDominators cfg bb = M.findWithDefault [] bb (pdoms cfg)
 data BBId = BBIdEntry | BBIdExit | BBId PC
   deriving (Eq, Ord, Show)
 
-ppBBId :: BBId -> Doc
+ppBBId :: BBId -> Doc ann
 ppBBId bbid = case bbid of
     BBIdEntry    -> "BB%entry"
     BBIdExit     -> "BB%exit"
-    BBId      pc -> "BB%" <> int (fromIntegral pc)
+    BBId      pc -> "BB%" <> pretty pc
 
 instance Enum BBId where
   toEnum 0 = BBIdEntry
