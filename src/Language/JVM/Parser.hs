@@ -680,12 +680,20 @@ getInstruction cp address = do
                (classType, key) <- poolMethodOrInterfaceRef cp index
                return $ Invokespecial classType key
     0xB8 -> do index <- getWord16be
-               (ClassType cName, key) <- poolMethodOrInterfaceRef cp index
+               (classType, key) <- poolMethodOrInterfaceRef cp index
+               cName <-
+                 case classType of
+                   ClassType cName -> pure cName
+                   _ -> failure ("invokestatic: expected class type, found " ++ show classType)
                pure $ Invokestatic cName key
     0xB9 -> do index <- getWord16be
                _ <- getWord8
                _ <- getWord8
-               (ClassType cName, key) <- poolInterfaceMethodRef cp index
+               (classType, key) <- poolInterfaceMethodRef cp index
+               cName <-
+                 case classType of
+                   ClassType cName -> pure cName
+                   _ -> failure ("invokeinterface: expected class type, found " ++ show classType)
                pure $ Invokeinterface cName key
     0xBA -> do index <- getWord16be
                _ <- getWord8
