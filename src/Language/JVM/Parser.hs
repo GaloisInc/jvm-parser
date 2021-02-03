@@ -395,6 +395,17 @@ poolClassType cp i =
     _ ->
       failure ("Index " ++ show i ++ " is not a class reference.")
 
+poolClassName :: ConstantPool -> ConstantPoolIndex -> Get ClassName
+poolClassName cp i =
+  case cp ! i of
+    ConstantClass j ->
+      do typeName <- poolUtf8 cp j
+         when (head typeName == '[') $
+           failure ("Index " ++ show i ++ " is an array type and not a class.")
+         pure $ mkClassName typeName
+    _ ->
+      failure ("Index " ++ show i ++ " is not a class reference.")
+
 poolNameAndType :: ConstantPool -> ConstantPoolIndex -> Get (String, String)
 poolNameAndType cp i =
   case cp ! i of
@@ -409,7 +420,7 @@ poolFieldRef cp i =
     FieldRef classIndex ntIndex ->
       do (name, descriptor) <- poolNameAndType cp ntIndex
          fldType <- parseType descriptor
-         ClassType cName <- poolClassType cp classIndex
+         cName <- poolClassName cp classIndex
          pure $ FieldId cName name fldType
     _ -> failure ("Index " ++ show i ++ " is not a field reference.")
 
@@ -672,11 +683,7 @@ getInstruction cp address = do
                _ <- getWord8
                _ <- getWord8
                return $ Invokedynamic index
-    0xBB -> do ty <- getWord16be >>= poolClassType cp
-               case ty of
-                 ClassType name -> pure (New name)
-                 _ -> failure "internal: unexpected pool class type"
-    0xBD -> Newarray . ArrayType <$> (poolClassType cp =<< getWord16be)
+    0xBB -> New <$> (poolClassName cp =<< getWord16be)
     0xBC -> do typeCode <- getWord8
                elementType <-
                  case typeCode of
@@ -690,6 +697,7 @@ getInstruction cp address = do
                    11 -> pure LongType
                    _  -> failure "internal: invalid type code encountered"
                pure $ Newarray (ArrayType elementType)
+    0xBD -> Newarray . ArrayType <$> (poolClassType cp =<< getWord16be)
     0xBE -> return Arraylength
     0xBF -> return Athrow
     0xC0 -> Checkcast <$> (poolClassType cp =<< getWord16be)
@@ -1331,14 +1339,11 @@ getClass = do
     majorVersion'   <- getWord16be
     cp              <- getConstantPool
     accessFlags     <- getWord16be
-    thisClass       <- getReferenceName cp
+    thisClass       <- getWord16be >>= poolClassName cp
     superClassIndex <- getWord16be
     superClass'     <- if superClassIndex == 0 then pure Nothing else
-                       poolClassType cp superClassIndex >>=
-                       \case
-                         ClassType name -> pure (Just name)
-                         classType -> failure ("Unexpected class type " ++ show classType)
-    interfaces      <- getWord16be >>= replicateN (getReferenceName cp)
+                       Just <$> poolClassName cp superClassIndex
+    interfaces      <- getWord16be >>= replicateN (getWord16be >>= poolClassName cp)
     fields          <- getWord16be >>= replicateN (getField cp)
     methods         <- getWord16be >>= replicateN (getMethod cp)
     ([sourceFile], userAttrs) <- splitAttributes cp ["SourceFile"]
@@ -1362,11 +1367,6 @@ getClass = do
                      (Map.fromList (map (\m -> (methodKey m, m)) methods))
                      sourceFile'
                      userAttrs
-  where getReferenceName cp = do
-          ty <- getWord16be >>= poolClassType cp
-          case ty of
-            ClassType name -> pure name
-            tp -> failure ("Unexpected class type " ++ show tp)
 
 -- | Returns method with given key in class or 'Nothing' if no method with that
 -- key is found.
