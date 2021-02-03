@@ -253,22 +253,35 @@ data ConstantPoolInfo
   | Phantom
   deriving (Show)
 
--- Parses array of bytes from Java string
-getJavaString :: [Word8] -> String
-getJavaString []  = []
-getJavaString (x : rest)
-  | (x .&. 0x80) == 0 = chr (fromIntegral x) : getJavaString rest
-getJavaString (x : y : rest)
+-- | Parse a string from a list of bytes, according to section 4.4.7
+-- of the JVM spec: "String content is encoded in modified UTF-8.
+-- Modified UTF-8 strings are encoded so that code point sequences
+-- that contain only non-null ASCII characters can be represented
+-- using only 1 byte per code point, but all code points in the
+-- Unicode codespace can be represented."
+--
+-- "There are two differences between this format and the "standard"
+-- UTF-8 format. First, the null character (char)0 is encoded using
+-- the 2-byte format rather than the 1-byte format, so that modified
+-- UTF-8 strings never have embedded nulls. Second, only the 1-byte,
+-- 2-byte, and 3-byte formats of standard UTF-8 are used. The Java
+-- Virtual Machine does not recognize the four-byte format of standard
+-- UTF-8; it uses its own two-times-three-byte format instead."
+parseJavaString :: [Word8] -> Maybe String
+parseJavaString [] = Just []
+parseJavaString (x : rest)
+  | (x .&. 0x80) == 0 = (:) (chr (fromIntegral x)) <$> parseJavaString rest
+parseJavaString (x : y : rest)
   | (x .&. 0xE0) == 0xC0 && ((y .&. 0xC0) == 0x80)
-  = chr i : getJavaString rest
+  = (:) (chr i) <$> parseJavaString rest
   where i = (fromIntegral x .&. 0x1F) `shift` 6 + (fromIntegral y .&. 0x3F)
-getJavaString (x : y : z : rest)
+parseJavaString (x : y : z : rest)
   | (x .&. 0xF0) == 0xE0 && ((y .&. 0xC0) == 0x80) && ((z .&. 0xC0) == 0x80)
-    = chr i : getJavaString rest
+  = (:) (chr i) <$> parseJavaString rest
   where i = ((fromIntegral x .&. 0x0F) `shift` 12
              + (fromIntegral y .&. 0x3F) `shift` 6
              + (fromIntegral z .&. 0x3F))
-getJavaString _ = error "internal: unable to parse byte array for Java string"
+parseJavaString _ = Nothing
 
 getConstantPoolInfo :: Get [ConstantPoolInfo]
 getConstantPoolInfo = do
@@ -276,7 +289,9 @@ getConstantPoolInfo = do
   case tag of
     -- CONSTANT_Utf8
     1 -> do bytes <- replicateN getWord8 =<< getWord16be
-            return [Utf8 $ getJavaString bytes]
+            case parseJavaString bytes of
+              Nothing -> failure "unable to parse byte array for Java string"
+              Just s -> return [Utf8 s]
     ---- CONSTANT_Integer
     3 -> do val <- get
             return [ConstantInteger val]
