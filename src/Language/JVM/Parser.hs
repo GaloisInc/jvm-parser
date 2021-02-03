@@ -141,6 +141,15 @@ import Language.JVM.Common
 failure :: String -> Get a
 failure msg = fail msg
 
+-- | Run an inner parser on a bytestring, passing along any failures.
+subParser :: Get a -> L.ByteString -> Get a
+subParser g l =
+  case runGetOrFail g l of
+    Left (_, pos, msg) ->
+      failure ("Sub-parser failed at position " ++ show pos ++ ": " ++ msg)
+    Right (_, _, x) ->
+      pure x
+
 -- Version of replicate with arguments convoluted for parser.
 replicateN :: (Integral b, Monad m) => m a -> b -> m [a]
 replicateN fn i = sequence (replicate (fromIntegral i) fn)
@@ -837,12 +846,12 @@ getField cp = do
        <- splitAttributes cp ["ConstantValue", "Synthetic", "Deprecated", "Signature"]
     constantVal <-
       case constantValue of
-        [bytes] -> Just <$> poolValue cp (runGet getWord16be bytes) -- FIXME runGet is partial
+        [bytes] -> Just <$> (poolValue cp =<< subParser getWord16be bytes)
         [] -> pure Nothing
         _ -> failure "internal: unexpected constant value form"
     sig <-
       case signature of
-        [bytes] -> Just <$> poolUtf8 cp (runGet getWord16be bytes) -- FIXME runGet is partial
+        [bytes] -> Just <$> (poolUtf8 cp =<< subParser getWord16be bytes)
         [] -> pure Nothing
         _ -> failure "internal: unexpected signature form"
     visibility <-
@@ -933,13 +942,12 @@ getLineNumberTableEntries = do
                  lineNumber <- getWord16be
                  return (startPc', lineNumber))
 
-
-parseLineNumberTable :: [L.ByteString] -> LineNumberTable
+parseLineNumberTable :: [L.ByteString] -> Get LineNumberTable
 parseLineNumberTable buffers =
-  let l = concatMap (runGet getLineNumberTableEntries) buffers
-   in LNT { pcLineMap = Map.fromList l
-          , linePCMap = Map.fromListWith min [ (ln,pc) | (pc,ln) <- l ]
-          }
+  do l <- concat <$> traverse (subParser getLineNumberTableEntries) buffers
+     pure LNT { pcLineMap = Map.fromList l
+              , linePCMap = Map.fromListWith min [ (ln,pc) | (pc,ln) <- l ]
+              }
 
 ----------------------------------------------------------------------
 -- LocalVariableTableEntry
@@ -968,9 +976,9 @@ getLocalVariableTableEntries cp = do
                  index           <- getWord16be
                  pure $ LocalVariableTableEntry startPc' len name ty index)
 
-parseLocalVariableTable :: ConstantPool -> [L.ByteString] -> [LocalVariableTableEntry]
+parseLocalVariableTable :: ConstantPool -> [L.ByteString] -> Get [LocalVariableTableEntry]
 parseLocalVariableTable cp buffers =
-  (concat $ map (runGet $ getLocalVariableTableEntries cp) buffers)
+  concat <$> traverse (subParser (getLocalVariableTableEntries cp)) buffers
 
 ----------------------------------------------------------------------
 -- Method body
@@ -996,12 +1004,14 @@ getCode cp = do
   exceptionTable <- getWord16be >>= replicateN (getExceptionTableEntry cp)
   ([lineNumberTables, localVariableTables], userAttrs)
                  <- splitAttributes cp ["LineNumberTable", "LocalVariableTable"]
+  lnt <- parseLineNumberTable lineNumberTables
+  lvt <- parseLocalVariableTable cp localVariableTables
   return $ Code maxStack
                 maxLocals
                 (buildCFG exceptionTable instructions)
                 exceptionTable
-                (parseLineNumberTable lineNumberTables)
-                (parseLocalVariableTable cp localVariableTables)
+                lnt
+                lvt
                 userAttrs
 
 ----------------------------------------------------------------------
@@ -1097,25 +1107,26 @@ getMethod cp = do
         isSynchronized' = (accessFlags .&. 0x020) /= 0
         isAbstract      = (accessFlags .&. 0x400) /= 0
         isStrictFp'     = (accessFlags .&. 0x800) /= 0
-     in return $
+    body <-
+      if ((accessFlags .&. 0x100) /= 0) then pure NativeMethod else
+        if isAbstract then pure AbstractMethod else
+          case codeVal of
+            [bytes] -> subParser (getCode cp) bytes
+            _ -> failure "Could not find code attribute"
+    exceptions <-
+      case exceptionsVal of
+        [bytes] -> Just <$> subParser (getExceptions cp) bytes
+        [] -> pure Nothing
+        _ -> failure "internal: unexpected expectionsVal form"
+    return $
           Method (MethodKey name parameterTypes returnType)
                  visibility
                  isStatic'
                  isFinal
                  isSynchronized'
                  isStrictFp'
-                 (if ((accessFlags .&. 0x100) /= 0)
-                   then NativeMethod
-                   else if isAbstract
-                     then AbstractMethod
-                     else case codeVal of
-                            [bytes] -> runGet (getCode cp) bytes
-                            _ -> error "Could not find code attribute")
-                 (case exceptionsVal of
-                   [bytes] -> Just (runGet (getExceptions cp) bytes)
-                   [] -> Nothing
-                   _ -> error "internal: unexpected expectionsVal form"
-                 )
+                 body
+                 exceptions
                  (not $ null syntheticVal)
                  (not $ null deprecatedVal)
                  userAttrs
@@ -1350,7 +1361,7 @@ getClass = do
     ([sourceFile], userAttrs) <- splitAttributes cp ["SourceFile"]
     sourceFile' <-
       case sourceFile of
-        [bytes] -> Just <$> poolUtf8 cp (runGet getWord16be bytes) -- FIXME: runGet is partial
+        [bytes] -> Just <$> (poolUtf8 cp =<< subParser getWord16be bytes)
         [] -> pure Nothing
         _ -> failure "internal: unexpected source file form"
     return $ MkClass majorVersion'
@@ -1379,8 +1390,9 @@ loadClass :: FilePath -> IO Class
 loadClass path = do
   handle <- openBinaryFile path ReadMode
   contents <- L.hGetContents handle
-  let result = runGet getClass contents
-   in result `seq` (hClose handle >> return result)
+  case runGetOrFail getClass contents of
+    Left (_, pos, msg) -> fail $ "loadClass: parse failure at offset " ++ show pos ++ ": " ++ msg
+    Right (_, _, result) -> result `seq` (hClose handle >> pure result)
 
 getElemTy :: Type -> Type
 getElemTy (ArrayType t) = aux t
