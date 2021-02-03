@@ -128,7 +128,6 @@ import Data.Int
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
-import Data.Maybe (fromJust)
 import Prelude hiding(read)
 import System.IO
 
@@ -1082,9 +1081,17 @@ getMethod cp = do
     accessFlags <- getWord16be
     name        <- getWord16be >>= poolUtf8 cp
     descriptor  <- getWord16be >>= poolUtf8 cp
-    let (returnType, parameterTypes) = fromJust (parseMethodDescriptor descriptor)
+    (returnType, parameterTypes) <-
+      maybe (failure "Invalid method descriptor") pure $ parseMethodDescriptor descriptor
     ([codeVal, exceptionsVal, syntheticVal, deprecatedVal], userAttrs)
          <- splitAttributes cp ["Code", "Exceptions", "Synthetic", "Deprecated"]
+    visibility <-
+      case accessFlags .&. 0x7 of
+        0x0 -> pure Default
+        0x1 -> pure Public
+        0x2 -> pure Private
+        0x4 -> pure Protected
+        flags -> failure $ "Unexpected flags " ++ show flags
     let isStatic'       = (accessFlags .&. 0x008) /= 0
         isFinal         = (accessFlags .&. 0x010) /= 0
         isSynchronized' = (accessFlags .&. 0x020) /= 0
@@ -1092,13 +1099,7 @@ getMethod cp = do
         isStrictFp'     = (accessFlags .&. 0x800) /= 0
      in return $
           Method (MethodKey name parameterTypes returnType)
-                 -- Visibility
-                 (case accessFlags .&. 0x7 of
-                   0x0 -> Default
-                   0x1 -> Public
-                   0x2 -> Private
-                   0x4 -> Protected
-                   flags -> error $ "Unexpected flags " ++ show flags)
+                 visibility
                  isStatic'
                  isFinal
                  isSynchronized'
