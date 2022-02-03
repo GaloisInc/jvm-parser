@@ -120,7 +120,7 @@ import Data.Array (Array, (!), listArray)
 import Data.Binary
 import Data.Binary.Get
 import Data.Binary.IEEE754
-import Data.Bits
+import Data.Bits (Bits(..))
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
 import Data.Char
