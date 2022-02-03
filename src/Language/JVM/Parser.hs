@@ -128,6 +128,7 @@ import Data.Int
 import Data.List
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Maybe (fromMaybe)
 import Prelude hiding(read)
 import System.IO
 
@@ -234,7 +235,8 @@ makeMethodKey :: String -- ^ Method name
               -> String -- ^ Method descriptor
               -> MethodKey
 makeMethodKey name descriptor = MethodKey name parameters returnType
-  where Just (returnType, parameters) = parseMethodDescriptor descriptor
+  where (returnType, parameters) =
+          fromMaybe (error "Invalid method descriptor") $ parseMethodDescriptor descriptor
 
 mainKey :: MethodKey
 mainKey = makeMethodKey "main" "([Ljava/lang/String;)V"
