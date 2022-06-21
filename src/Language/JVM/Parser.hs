@@ -119,7 +119,6 @@ import Control.Monad
 import Data.Array (Array, (!), listArray)
 import Data.Binary
 import Data.Binary.Get
-import Data.Binary.IEEE754
 import Data.Bits (Bits(..))
 import qualified Data.ByteString as B
 import qualified Data.ByteString.Lazy as L
@@ -306,13 +305,13 @@ getConstantPoolInfo = do
     3 -> do val <- get
             return [ConstantInteger val]
     ---- CONSTANT_Float
-    4  -> do v <- getFloat32be
+    4  -> do v <- getFloatbe
              return [ConstantFloat v]
     ---- CONSTANT_Long
     5  -> do val <- get
              return [Phantom, ConstantLong val]
     ---- CONSTANT_Double
-    6  -> do val <- getFloat64be
+    6  -> do val <- getDoublebe
              return [Phantom, ConstantDouble val]
     ---- CONSTANT_Class
     7  -> do index <- getWord16be
