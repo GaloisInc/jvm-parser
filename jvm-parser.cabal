@@ -31,7 +31,6 @@ Library
                        binary,
                        bytestring,
                        containers,
-                       data-binary-ieee754,
                        fgl,
                        fingertree,
                        prettyprinter >= 1.7.0,
