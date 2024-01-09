@@ -398,9 +398,9 @@ poolClassType cp i =
   case cp ! i of
     ConstantClass j ->
       do typeName <- poolUtf8 cp j
-         if head typeName == '['
-           then parseType typeName
-           else pure $ ClassType (mkClassName typeName)
+         case typeName of
+           '[':_ -> parseType typeName
+           _     -> pure $ ClassType (mkClassName typeName)
     _ ->
       failure ("Index " ++ show i ++ " is not a class reference.")
 
@@ -409,8 +409,10 @@ poolClassName cp i =
   case cp ! i of
     ConstantClass j ->
       do typeName <- poolUtf8 cp j
-         when (head typeName == '[') $
-           failure ("Index " ++ show i ++ " is an array type and not a class.")
+         case typeName of
+           '[':_ ->
+             failure ("Index " ++ show i ++ " is an array type and not a class.")
+           _ -> pure ()
          pure $ mkClassName typeName
     _ ->
       failure ("Index " ++ show i ++ " is not a class reference.")
