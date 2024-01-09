@@ -419,7 +419,7 @@ retTargetXfer extbl istrm acc (Just pc, localr) = xfer (lkup pc)
 
 leaderPC :: BasicBlock -> PC
 leaderPC BB{ bbInsts = [] } = error "internal: leaderPC on empty BB"
-leaderPC bb                 = fst . head . bbInsts $ bb
+leaderPC bb                 = headInsts . bbInsts $ bb
 
 terminatorPC :: BasicBlock -> PC
 terminatorPC BB { bbInsts = [] }    = error "internal: terminatorPC on empty BB"
